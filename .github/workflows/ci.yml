@@ -111,3 +111,43 @@ jobs:
         with:
           changelog: CHANGELOG.monotonic.scratch.md
           base-ref: monotonic-fixture-base
+
+  # Exercises actions/docs-sync the way a consumer does (issue #19's
+  # acceptance criterion). Its own job, unlike the exercises above: the
+  # composite reads the CONSUMER's tree at the workspace root, and a
+  # `uses:` step cannot change directory — so the fixture consumer must BE
+  # the workspace root, with ceremony itself checked out to a subdirectory
+  # (that path also serves as the action reference and the --source
+  # override; no ref carrying docs/VENDORED.txt exists to fetch until this
+  # lands, and the exercised bytes should be THIS PR's anyway).
+  docs-sync-exercise:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: ceremony-src
+      - name: Construct a fixture consumer at the workspace root
+        # The pin ref is scratch — --source overrides the fetch, but the
+        # pin line itself is still parsed and required (one pin governs
+        # machinery and doctrine; a consumer without one has nothing for
+        # the mirror to be verified against).
+        run: |
+          mkdir -p .github/workflows
+          printf '%s\n' \
+            'name: release' \
+            'on:' \
+            '  push:' \
+            '    branches: [main]' \
+            'jobs:' \
+            '  release:' \
+            '    uses: heavy-duty/ceremony/.github/workflows/release.yml@0.0.0-fixture' \
+            > .github/workflows/release.yml
+      - name: Bootstrap the mirror (--fix)
+        uses: ./ceremony-src/actions/docs-sync
+        with:
+          mode: fix
+          source: ceremony-src
+      - name: Verify the mirror (--check, the mode consumers run)
+        uses: ./ceremony-src/actions/docs-sync
+        with:
+          source: ceremony-src

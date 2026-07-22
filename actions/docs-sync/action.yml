@@ -1,0 +1,33 @@
+name: Docs sync
+description: >-
+  Verify (or write) the consumer's `.ceremony/` doctrine mirror —
+  byte-identical to heavy-duty/ceremony at the consumer's pinned ref
+  (issue #19). Machinery is consumed by reference; documents have no
+  runtime, so they are vendored, machine-written and machine-verified.
+  The pin is read from the consumer's `.github/workflows/release.yml` —
+  the same single line that pins the release workflow, so one pin governs
+  machinery and doctrine alike. The caller must have checked out its own
+  repository first: the tool reads the consumer's tree at the workspace.
+inputs:
+  mode:
+    description: >-
+      "check" diffs the mirror against the pin and fails on any drift
+      (what CI runs); "fix" writes the mirror to match exactly.
+    required: false
+    default: check
+  source:
+    description: >-
+      Optional local ceremony checkout to mirror from instead of fetching
+      the pinned ref — offline tests, and previewing a ceremony PR against
+      a consumer before release.
+    required: false
+    default: ""
+runs:
+  using: composite
+  steps:
+    - name: docs sync
+      shell: bash
+      env:
+        MODE: ${{ inputs.mode }}
+        SOURCE: ${{ inputs.source }}
+      run: bash "$GITHUB_ACTION_PATH/docs-sync.sh"
