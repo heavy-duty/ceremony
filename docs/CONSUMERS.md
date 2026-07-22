@@ -1,5 +1,138 @@
 # Consumer setup
 
+How a repo adopts the ceremony — bootstrap for a greenfield repo, a
+conversion checklist for a repo carrying its own copy of the machinery,
+and the policies that keep either honest afterwards. The doctrine (what a
+release *is*, the doors, the guards, the drill) lives in
+[../README.md](../README.md); this guide is the how-to. It is meant to be
+sufficient on its own: a conversion executed from this guide should need
+zero out-of-band knowledge, and gaps found while converting are filed as
+edits to this guide (#12).
+
+## Prerequisites
+
+- **Repo shape**: work lands on a `main` default branch by PR; fork PRs
+  are fine — the merge door rides `push` to `main`, never `pull_request`
+  ([release.yml](../.github/workflows/release.yml#L70-L74), box#97), and
+  the label read goes through the API
+  ([lib/facts.sh](../lib/facts.sh#L88-L101)), so the ceremony never needs
+  the PR's own context. No PAT, no secrets: every permission the flow uses
+  is the caller-declared `GITHUB_TOKEN` grant.
+- **Pick the version backend**: `file` (a `VERSION` file — box, rig,
+  incubator) or `package-json` (the `version` field, lockfile kept in sync
+  on the post-release bump — cast). This is the workflow's one input; the
+  full configuration surface of the ceremony is enumerated in
+  [#1](https://github.com/heavy-duty/ceremony/issues/1) ("The
+  configuration axes").
+- **The `release` label must exist** before the first ceremony PR — it is
+  the merge door's declared-intent read
+  ([lib/facts.sh](../lib/facts.sh#L88-L101)). Bootstrap it via the labels
+  workflow's `workflow_dispatch`
+  ([Labels automation](#labels-automation)), or create it by hand,
+  matching the core table
+  ([actions/labels-reconcile/labels-reconcile.sh](../actions/labels-reconcile/labels-reconcile.sh#L369)):
+
+  ```sh
+  gh label create release --color 0E8A16 \
+    --description "Release flow and version/packaging work"
+  ```
+
+## Bootstrap a new repo
+
+The greenfield path (incubator's, #16) — the repo never owns a copy of
+the machinery at all:
+
+1. **`VERSION` at `X.Y.Z-dev` — never bare.** A first version that never
+   carried `-dev` hits the decide table's refuse row and has to ship by
+   the tag door (the known first-release edge, cast#111;
+   [lib/decide.sh](../lib/decide.sh#L70-L74)). Bootstrapping at `-dev`
+   keeps the repo clear of it entirely. (`package-json` backend: the
+   `version` field, same rule.)
+2. **An armed `CHANGELOG.md`**: a preamble plus an empty `## Unreleased`
+   section for the first entries to land under.
+3. **`drills/README.md`** defining what a drill *means* in this repo —
+   each repo names its own
+   ([the drill doctrine](../README.md#the-drill-doctrine)). Plain
+   `drills`, not a dot-directory
+   ([drill-recorded.sh](../actions/drill-recorded/drill-recorded.sh#L49-L52)).
+4. **`.github/workflows/release.yml`** — the caller, verbatim from
+   [Release workflow](#release-workflow) below.
+5. **CI guard steps** in the repo's `ci.yml`:
+
+   ```yaml
+       - uses: actions/checkout@v4
+         with:
+           # changelog-monotonic compares HEAD against the merge base; a
+           # checkout that cannot resolve it is a hard failure in CI, not
+           # a skip (a guard that can quietly stop guarding is the failure
+           # shape these checks exist to refuse).
+           fetch-depth: 0
+       - uses: heavy-duty/ceremony/actions/changelog-armed@<pinned-tag>
+       - uses: heavy-duty/ceremony/actions/changelog-monotonic@<pinned-tag>
+       - uses: heavy-duty/ceremony/actions/drill-recorded@<pinned-tag>
+   ```
+
+   `changelog-armed` and `drill-recorded` take
+   `version-source: package-json` where that is the backend; every guard's
+   inputs and defaults are in its `action.yml`
+   ([actions/](../actions/)). Adopting the agent team flow adds the
+   `docs-sync` step ([below](#adopting-the-agent-team-flow)).
+6. **Labels automation** (optional but recommended): the caller from
+   [Labels automation](#labels-automation), plus `.github/labels.conf`
+   (panel + the repo's `scope:*` rows) and `.github/labeler.yml` (the
+   path→scope globs). Run `workflow_dispatch` once — **this bootstraps
+   the taxonomy, `release` label included**.
+7. **The artifact hook** (optional): `.github/actions/release-artifact/`
+   per [The artifact hook](#the-artifact-hook). No hook → the source
+   tarball is the package.
+
+From there the flow is the doctrine: ordinary PRs add their changelog
+line, the ceremony PR makes
+[the three stamps](../README.md#what-a-release-is), a human merges, the
+machine transcribes.
+
+## Convert an existing repo
+
+The box/rig/cast path — the repo carries its own copy of the machinery
+and hands it over. The conversion PR is release-flow work: label it
+`release` if the repo's conventions ask for that, and either way it lands
+as a green `NOTICE` no-op on main — the decide table's green rows exist
+precisely so the machinery is safe to work on
+([lib/decide.sh](../lib/decide.sh#L6-L12)).
+
+- [ ] Replace `.github/workflows/release.yml` with the caller from
+      [Release workflow](#release-workflow) — **whole file**, keeping its
+      load-bearing comments. Check the result has **one** `push:` key
+      carrying both filters: YAML maps are last-key-wins, and a second
+      sibling `push:` silently kills a door (rig's review catch).
+- [ ] Swap the guard *script* steps in `ci.yml` for the `uses:` steps in
+      the bootstrap list above (with `fetch-depth: 0` on the checkout).
+- [ ] Replace `labels.yml` with the caller from
+      [Labels automation](#labels-automation); extract
+      `.github/labels.conf` from the old reconciler's embedded config —
+      the `panel=` roster line and the repo's `scope:*` rows
+      ([the format](#labels-automation)). `.github/labeler.yml` stays as
+      it is (path globs are inherently repo-specific).
+- [ ] Delete the now-shadowed copies — zero shared scripts remain:
+      `.github/scripts/release-notes.sh` (box, cast) or
+      `release-lib.sh` (rig), `changelog-armed.sh` (box),
+      `changelog-monotonic.sh`, `drill-recorded.sh`,
+      `labels-reconcile.sh`.
+- [ ] Trim the repo's test suite to repo-specific tests: the machinery
+      tests go — they live in this repo's `test/` now, run by its CI —
+      while the repo's own surfaces stay (box/rig's install-channel halves
+      of `test/release.sh`, cast's `install-sh` tests).
+- [ ] Shrink CONTRIBUTING's release section to a pointer at
+      [this repo's README](../README.md) plus what is genuinely per-repo:
+      the drill meaning (`drills/README.md`), artifact notes, the
+      changelog house style if it differs from
+      [the portable rule](#the-changelog-rule).
+- [ ] What stays, per repo, forever: `VERSION` (or the `package.json`
+      version), `CHANGELOG.md`, `drills/`, `.github/labeler.yml`,
+      `.github/labels.conf`, the optional
+      `.github/actions/release-artifact/` — the full kept-vs-moved table
+      is in [#1](https://github.com/heavy-duty/ceremony/issues/1).
+
 ## Release workflow
 
 The reusable release workflow implements both doors of the ceremony — the
@@ -65,7 +198,8 @@ a fixed tree. The merge door's nothing-exists assert will refuse a re-run of
 the completed merge, by design.
 
 No hook → no assets: for a pure-bash tree, GitHub's source tarball for the
-tag IS the package.
+tag IS the package. Worked examples land with the conversions: cast's tgz
+build (#15) and incubator's GHCR image push (#16).
 
 ## Labels automation
 
@@ -153,8 +287,99 @@ that routes agents to `.ceremony/AGENTS.md` — created once, never
 overwritten; it is per-repo content the moment you edit it, so `--check`
 asserts only that it exists.
 
-**The pin-bump procedure**: bumping the pin is one PR — the pin line change
-plus the re-synced mirror (run `--fix` locally, or let the red `--check` on
-the bump PR say what is stale). The guard makes a half-done bump — pin
-without mirror, mirror without pin — unmergeable, which is how a process
-change rolls out: deliberately, per repo, reviewed.
+Bumping the pin re-syncs the mirror in the same PR —
+[the pin-bump procedure](#the-pin-bump-procedure).
+
+## Version pinning
+
+- **Pin an exact ceremony release tag** — `@0.1.0`, never a branch and
+  never a moving major pointer: the family pins things and reviews
+  updates ([#1 D2](https://github.com/heavy-duty/ceremony/issues/1)).
+  Every `uses:` of this repo in the consumer — the two workflow callers
+  and the guard steps — names the same tag.
+- **Bump by PR.** Before bumping, read the ceremony's own `CHANGELOG.md`
+  section for the new version (the release body on its
+  [releases page](https://github.com/heavy-duty/ceremony/releases) is
+  that section, verbatim). A repo that has adopted the agent team flow
+  bumps pin and mirror together —
+  [the pin-bump procedure](#the-pin-bump-procedure); a release-only repo's
+  bump is the one-line `uses:` change.
+- **One pin governs machinery and doctrine.** The ref in the consumer's
+  `release.yml` `uses:` line is the single pin: `docs-sync` reads it from
+  exactly there and verifies the `.ceremony/` mirror against it — there
+  is no second pin to fall out of sync (#19).
+
+## The changelog rule
+
+The portable version of the family's contributor rule — the repo's own
+CONTRIBUTING may sharpen it, but this is the floor the guards assume:
+
+- **Every PR that changes behavior adds one line** under `## Unreleased`.
+- **Insert above the heading below — never type over it.** Replacing a
+  shipped `## X.Y.Z` heading with your entry deletes that release's
+  section, silently; this exact edit is why the
+  [monotonic guard](../README.md#changelog-monotonic--shipped-headings-are-append-only)
+  exists (box#122).
+- **One line: say what changed, and stop.** Lead with the surface, not
+  the mechanism — "`state:needs-human` is set at handoff" beats "the
+  labels workflow now also wakes on `labeled`". The why and the how
+  belong in the PR body, where anyone chasing the reasoning already goes.
+- **Cite the issue or PR** — `(#141)`.
+- **Mark a breaking change** with a leading `BREAKING:`.
+- Group under `### Added` / `### Changed` / `### Fixed` / `### Removed`.
+
+## Adopting the agent team flow
+
+The team flow (discussion → triage → issue → build → review → human
+merge) is **optional per repo and separable from the release ceremony**:
+a repo can adopt release-only and take the team flow later — incubator's
+initial posture (#16). The model is this repo's own
+[CONTRIBUTING](../CONTRIBUTING.md) ("How the other repos use this");
+this is the checklist:
+
+- [ ] **Enable Discussions** — the triage door exists or the pipeline
+      has no intake.
+- [ ] **Vendor the doctrine**: run `docs-sync --fix` (#19) to materialize
+      `.ceremony/{AGENTS,TRIAGE,BUILDER,REVIEWER,LABELS}.md` —
+      byte-identical to this repo at the pinned ref — plus the generated
+      `.ceremony/README.md` (machine-managed marker) and, if the repo has
+      none, the thin root `AGENTS.md` stub ("governed by
+      heavy-duty/ceremony; read `.ceremony/AGENTS.md` first; repo
+      specifics in CONTRIBUTING"). The stub is scaffolded once and never
+      overwritten; the mirror is machine-written and never hand-edited.
+      Commit `.ceremony/` together with the workflow callers.
+- [ ] **Guard the mirror in CI**: add the `docs-sync` check step
+      alongside the other guards —
+
+      ```yaml
+          - uses: heavy-duty/ceremony/actions/docs-sync@<pinned-tag>
+      ```
+
+      (`mode: check` is the default.) Hand-editing a vendored file, or
+      bumping the pin without re-syncing, goes red (#19).
+- [ ] **Reduce tool-specific files** (`CLAUDE.md`, …) to one pointer line
+      at the root `AGENTS.md`, so every harness converges on the same
+      router.
+- [ ] **Point CONTRIBUTING at the mirror**: a short header telling agents
+      to read `.ceremony/` first — agents never leave the working tree to
+      read the rules — followed by only what is genuinely per-repo: the
+      review panel roster, the `scope:*` set, the drill meaning, the
+      repo's code conventions.
+- [ ] **Name the review panel**: the roster table in CONTRIBUTING and the
+      `panel=` line in `.github/labels.conf` — the required verdicts for
+      any PR are the panel minus its author (#10).
+- [ ] **Bootstrap the issue-flow labels**: the labels
+      `workflow_dispatch` once ([above](#labels-automation)), or the hand
+      commands in [LABELS.md](../LABELS.md).
+- [ ] **State the single-writer rule** in the repo's own docs: only
+      triage mints issues; everyone else opens discussions.
+
+### The pin-bump procedure
+
+Bumping the ceremony pin is **one PR carrying both halves**: the pin-line
+change in the workflow callers, and the re-synced `.ceremony/` mirror —
+run `docs-sync --fix` locally, or let the red `--check` on the bump PR
+tell you what is stale. The CI guard is what makes a half-done bump —
+pin without mirror, or mirror without pin — unmergeable (#19). This is
+how a process change rolls out to a governed repo: deliberately, per
+repo, reviewed.
