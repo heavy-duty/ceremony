@@ -1,0 +1,36 @@
+name: release exercise
+# The scratch caller (issue #9's acceptance criterion): workflow_dispatch,
+# dry wiring only. A dispatch proves two things without opening a door:
+#
+#   * `call` — a workflow_call `uses:` validates and parses the called file
+#     when the run starts, so a green run proves release.yml parses and its
+#     input contract wires. Both jobs inside it are gated on the push event
+#     (rig's form), so a dispatch — even from main — skips them by design:
+#     nothing is tagged, published, or bumped.
+#   * `fixture-chain` — the merge door's script chain (facts → decide →
+#     notes) runs end-to-end against a constructed fixture repo with a
+#     stubbed gh, via the same contract test CI runs on every PR.
+#
+# The live doors are the stated honest gap, closed by #11 (ceremony's own
+# 0.1.0 release calls this exact workflow by local path) and the #13
+# pilot's rehearsal.
+on: workflow_dispatch
+
+permissions:
+  contents: read
+
+jobs:
+  call:
+    # Dry: version-source exercises the input contract; the doors stay shut
+    # on a non-push event. The real caller stub — triggers, permissions,
+    # the pinned ref — lives in release.yml's header and docs/CONSUMERS.md.
+    uses: ./.github/workflows/release.yml
+    with:
+      version-source: file
+
+  fixture-chain:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: the merge door's script chain against a fixture ceremony
+        run: bash test/release-chain.test.sh

@@ -27,6 +27,10 @@ jobs:
           sudo install actionlint /usr/local/bin/actionlint
       - name: Actionlint
         run: bash .github/scripts/actionlint-all.sh
+      - name: Self-ref pin
+        # The pin rules (issue #9; #1 D3): a stale CEREMONY_SELF_REF fails
+        # CI here, not a consumer's release.
+        run: bash .github/scripts/self-ref-check.sh
       - name: Tests
         env:
           # The npm-backed version_write case may skip locally when npm is
