@@ -99,8 +99,8 @@ blocked_decision() { # $1 refs, $2 OPEN/CLOSED states
 }
 
 epic_references() { # markdown task-list issue references from body on stdin
-  sed -nE '/^[[:space:]]*[-*][[:space:]]+\[[ xX]\]/ { s/.*#([0-9]+).*/\1/p; }' \
-    | sort -nu
+  sed -nE '/^[[:space:]]*[-*][[:space:]]+\[[ xX]\]/p' \
+    | { grep -Eo '#[0-9]+' || true; } | tr -d '#' | sort -nu
 }
 
 epic_decision() { # $1 refs, $2 states
@@ -130,7 +130,14 @@ reference_states() {
 
 last_issue_activity() {
   local n="$1" created="$2" latest
-  latest="$({ printf '%s\n' "$created"; gh api --paginate "repos/$REPO/issues/$n/comments" --jq '.[].created_at'; } \
+  latest="$({
+      printf '%s\n' "$created"
+      gh api --paginate "repos/$REPO/issues/$n/comments" --jq '.[].created_at'
+      # Assignment is the claim itself. Ignoring it would let an old issue be
+      # reclaimed in the seconds between assignment and its required draft PR.
+      gh api --paginate "repos/$REPO/issues/$n/timeline" \
+        --jq '.[] | select(.event == "assigned") | .created_at'
+    } \
     | sort | tail -n1)"
   date -d "$latest" +%s
 }
@@ -209,15 +216,27 @@ reconcile_issue() {
 }
 
 main() {
+  local owner name
   REPO="${REPO:?set REPO to owner/name}"
   LABELS_CONF="${LABELS_CONF:-.github/labels.conf}"
   load_issueflow_config "$LABELS_CONF"
   NOW="$(date +%s)"
-  OPEN_PR_ISSUES="$(gh pr list -R "$REPO" --state open --limit 100 \
-    --json closingIssuesReferences --jq '.[].closingIssuesReferences[].number' | sort -nu)"
+  owner="${REPO%%/*}"
+  name="${REPO#*/}"
+  OPEN_PR_ISSUES="$(gh api graphql --paginate -f owner="$owner" -f name="$name" -f query='
+    query($owner: String!, $name: String!, $endCursor: String) {
+      repository(owner: $owner, name: $name) {
+        pullRequests(first: 100, states: OPEN, after: $endCursor) {
+          nodes { closingIssuesReferences(first: 100) { nodes { number } } }
+          pageInfo { hasNextPage endCursor }
+        }
+      }
+    }' --jq '.data.repository.pullRequests.nodes[].closingIssuesReferences.nodes[].number' \
+    | sort -nu)"
 
   local n
-  for n in $(gh issue list -R "$REPO" --state open --limit 100 --json number --jq '.[].number'); do
+  for n in $(gh api --paginate "repos/$REPO/issues?state=open&per_page=100" \
+      --jq '.[] | select(has("pull_request") | not) | .number'); do
     (
       ISSUE_JSON="$(gh api "repos/$REPO/issues/$n")"
       jq -e 'has("pull_request") | not' <<<"$ISSUE_JSON" >/dev/null || exit 0
