@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/changelog.sh
+source "$ROOT/lib/changelog.sh"
+
+changelog="${1:-}"
+ver="${2:-}"
+if [ -z "$changelog" ] || [ -z "$ver" ]; then
+  echo "usage: changelog-section <file> <version>" >&2
+  exit 2
+fi
+[ -f "$changelog" ] || {
+  echo "changelog-section: no such file: $changelog" >&2
+  exit 1
+}
+
+notes="$(changelog_section "$changelog" "$ver")"
+[ -n "$notes" ] || {
+  echo "changelog-section: $changelog has no section for '$ver' — the release PR stamps the Unreleased section with version + date BEFORE the tag" >&2
+  exit 1
+}
+printf '%s\n' "$notes"
