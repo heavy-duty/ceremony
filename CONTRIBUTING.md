@@ -88,11 +88,11 @@ Two consumption modes, split by what has a runtime:
 - **Doctrine is consumed as a machine-verified mirror.** A document's only
   "runtime" is an agent reading the working tree of the repo it stands in —
   a doc that requires a cross-repo fetch before it governs is a doc that
-  sometimes goes unread. So the agent-facing set — **TRIAGE.md, BUILDER.md,
-  REVIEWER.md, LABELS.md** — is vendored into each governed repo at
-  **`.ceremony/`**, byte-identical to this repo at the pinned ref, by the
-  sync tool (issue #19). A CI guard diffs the mirror against the pin on
-  every PR: hand-editing a vendored file, or bumping the pin without
+  sometimes goes unread. So the agent-facing set — **AGENTS.md, TRIAGE.md,
+  BUILDER.md, REVIEWER.md, LABELS.md** — is vendored into each governed
+  repo at **`.ceremony/`**, byte-identical to this repo at the pinned ref,
+  by the sync tool (issue #19). A CI guard diffs the mirror against the pin
+  on every PR: hand-editing a vendored file, or bumping the pin without
   re-syncing, goes red. It is a copy that cannot drift — which is the only
   kind of copy this org allows.
 
@@ -100,6 +100,12 @@ A governed repo (box, rig, cast, incubator, …) therefore carries:
 
 - `.ceremony/` — the vendored doctrine (machine-written; never edited by
   hand; agents read it from the checkout, no network, no other repo);
+- a thin root **`AGENTS.md` stub** — a few lines: "governed by
+  heavy-duty/ceremony; read `.ceremony/AGENTS.md` first; repo specifics in
+  CONTRIBUTING". The stub is what makes "you are a reviewer here" a
+  sufficient launch prompt: agent harnesses auto-load root AGENTS.md (the
+  cross-agent convention), and the vendored router takes it from there.
+  Tool-specific files (`CLAUDE.md`, …) reduce to one pointer line at it;
 - the thin workflow callers (release, labels) pinned to a ceremony tag, plus
   the `docs-sync --check` guard step in CI;
 - a short header in its own CONTRIBUTING pointing agents at `.ceremony/`,
