@@ -27,10 +27,10 @@ In order of authority:
    spec. Check every criterion; a PR that ships less than the issue says is
    a request-changes even if the code is beautiful.
 2. **The repo's load-bearing constraints** — the rules bought with
-   incidents (in this repo: issue #1's constraint list; in a governed repo:
-   its CONTRIBUTING and this repo's README). A change that "simplifies away"
-   a constraint gets request-changes with a link to the incident that made
-   the rule.
+   incidents (in ceremony itself: issue #1's constraint list; in a governed
+   repo: its own CONTRIBUTING plus ceremony's README). A change that
+   "simplifies away" a constraint gets request-changes with a link to the
+   incident that made the rule.
 3. **The code itself** — correctness first, then tests (does the test plan's
    floor exist? do the failure cases actually fail?), then conventions.
    Changelog line present for behavior changes; comments carry why, not

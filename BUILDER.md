@@ -45,7 +45,9 @@ triage bug, and the move is to say so on the issue, not to guess.
 
 ## The review round
 
-From here the PR flow in [CONTRIBUTING.md](CONTRIBUTING.md) governs:
+(If you are reading this as `.ceremony/BUILDER.md` in a governed repo: the
+panel roster and any repo-specific flow notes live in that repo's own
+CONTRIBUTING; everything below is the shared flow.)
 
 1. Mark ready-for-review; request **the whole panel** (the roster is in the
    repo's CONTRIBUTING).

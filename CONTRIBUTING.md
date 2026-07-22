@@ -80,23 +80,39 @@ repo names its own roster in its CONTRIBUTING.
 
 ## How the other repos use this
 
-A governed repo (box, rig, cast, incubator, …) does not copy these documents.
-It carries:
+Two consumption modes, split by what has a runtime:
 
-- a short header in its own CONTRIBUTING: *"this repo is governed by
-  [heavy-duty/ceremony](https://github.com/heavy-duty/ceremony) at the ref
-  pinned in `.github/workflows/release.yml` — agents read CONTRIBUTING.md,
-  LABELS.md, TRIAGE.md, BUILDER.md and REVIEWER.md there before acting"* —
+- **Machinery is consumed by reference.** Workflows and actions are fetched
+  by GitHub at run time from the ref the caller pins — no copy exists in the
+  consumer.
+- **Doctrine is consumed as a machine-verified mirror.** A document's only
+  "runtime" is an agent reading the working tree of the repo it stands in —
+  a doc that requires a cross-repo fetch before it governs is a doc that
+  sometimes goes unread. So the agent-facing set — **TRIAGE.md, BUILDER.md,
+  REVIEWER.md, LABELS.md** — is vendored into each governed repo at
+  **`.ceremony/`**, byte-identical to this repo at the pinned ref, by the
+  sync tool (issue #19). A CI guard diffs the mirror against the pin on
+  every PR: hand-editing a vendored file, or bumping the pin without
+  re-syncing, goes red. It is a copy that cannot drift — which is the only
+  kind of copy this org allows.
+
+A governed repo (box, rig, cast, incubator, …) therefore carries:
+
+- `.ceremony/` — the vendored doctrine (machine-written; never edited by
+  hand; agents read it from the checkout, no network, no other repo);
+- the thin workflow callers (release, labels) pinned to a ceremony tag, plus
+  the `docs-sync --check` guard step in CI;
+- a short header in its own CONTRIBUTING pointing agents at `.ceremony/`,
   followed by only what is genuinely per-repo:
   - the **review panel roster**,
   - the **`scope:*` label set** (`.github/labels.conf` + `.github/labeler.yml`),
   - the **drill meaning** (`drills/README.md`),
   - the repo's own code conventions;
-- the thin workflow callers (release, labels) pinned to a ceremony tag;
 - **Discussions enabled**, so the triage door exists.
 
 One pin governs both the machinery and the doctrine: the ref a repo's
-workflows call is the ref its agents read. Bumping the pin is a one-line PR
-and is how a process change rolls out — deliberately, per repo, reviewed.
-The full adoption checklist lives in [docs/CONSUMERS.md](docs/CONSUMERS.md)
-(issue #12).
+workflows call is the ref its `.ceremony/` mirror is verified against.
+Bumping the pin is one PR — the pin line plus the re-synced mirror, checked
+by the same guard — and is how a process change rolls out: deliberately, per
+repo, reviewed. The full adoption checklist lives in
+[docs/CONSUMERS.md](docs/CONSUMERS.md) (issue #12).
