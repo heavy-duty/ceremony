@@ -34,3 +34,25 @@ jobs:
           # quietly stop running (issue #3's test contract).
           CEREMONY_REQUIRE_NPM: 1
         run: bash test/run.sh
+
+  # Exercises the composite actions the way a consumer does — action.yml
+  # resolving, $GITHUB_ACTION_PATH, the relative lib sourcing — which the
+  # test suite, driving the scripts directly, cannot prove (issue #5's
+  # acceptance criterion).
+  action-exercise:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Construct an armed scratch tree in the workspace
+        # This repo carries no VERSION or CHANGELOG.md of its own (until
+        # #11 dogfoods); the guard reads the workspace, so give it a
+        # transient armed tree there. The changelog is scratch-named so a
+        # future real CHANGELOG.md is never shadowed; VERSION cannot be —
+        # the file backend hardcodes it — so if #11 ever adds a real one,
+        # this write must go.
+        run: |
+          printf '0.0.1-dev\n' > VERSION
+          printf '# Changelog\n\n## Unreleased\n\n- Scratch entry.\n' > CHANGELOG.scratch.md
+      - uses: ./actions/changelog-armed
+        with:
+          changelog: CHANGELOG.scratch.md
