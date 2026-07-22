@@ -6,6 +6,8 @@ so entries say what changed, cite the issue, and stop.
 
 ## Unreleased
 
+## 0.1.0 — 2026-07-22
+
 - `lib/version.sh` — one version abstraction, `file` and `package-json` backends (#3).
 - `lib/changelog.sh` + `bin/changelog-section` — the one canonical changelog-section extractor (#4).
 - `actions/changelog-armed` — the version-keyed arming guard (#5).
