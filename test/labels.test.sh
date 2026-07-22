@@ -17,9 +17,11 @@ printf '%s\n' \
   'scope:two|C5DEF5|Second scope' >"$TMP/good.conf"
 
 check "config accepts panel, blanks, and scope rows" 0 "" load_config "$TMP/good.conf"
+# shellcheck disable=SC2016 # expansion belongs to the nested bash
 check "panel is parsed" 0 "one two three" bash -c \
   'source "$1"; load_config "$2"; printf "%s\n" "${BOTS[*]}"' _ \
   "$ROOT/actions/labels-reconcile/labels-reconcile.sh" "$TMP/good.conf"
+# shellcheck disable=SC2016 # expansion belongs to the nested bash
 check "core and config rows merge" 0 "scope:two|C5DEF5|Second scope" bash -c \
   'source "$1"; core_label_rows; configured_label_rows "$2"' _ \
   "$ROOT/actions/labels-reconcile/labels-reconcile.sh" "$TMP/good.conf"
