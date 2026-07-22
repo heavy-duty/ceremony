@@ -1,0 +1,19 @@
+# Light on purpose: discussions are where ambiguity is ALLOWED — a form
+# that demands rigor at the door defeats the room's purpose (issue #24,
+# decision 4). If these prompts fight the flow in practice, delete them
+# before adding fields to them.
+body:
+  - type: textarea
+    attributes:
+      label: What's the itch?
+      description: >-
+        Vague is fine — a bug, an idea, a "we should…". Triage turns this
+        into work (or an answer); you don't have to.
+    validations:
+      required: false
+  - type: textarea
+    attributes:
+      label: What would "done" feel like?
+      description: Optional — a sketch of the outcome, if you can already see it.
+    validations:
+      required: false
