@@ -22,7 +22,8 @@ fi
 # by requesting the human's review — an explicit request is a fact, and it is
 # the one this machine trusts (see decide_state's top precedence). The
 # machine auto-requests the human only in the no-judgment-needed case: every
-# required verdict is a formal head-current approval. Any approval that counts must be bound to
+# required verdict is a formal head-current approval. Any approval that counts
+# must be bound to
 # the CURRENT head SHA: GitHub keeps approvals alive across pushes, and a
 # stale approval must never promote unreviewed code to the human.
 #
@@ -32,7 +33,7 @@ fi
 # sweep tolerates a missing label rather than recreating it.
 #
 # The state machine below is pure (globals in, state out) and covered by
-# fixture tests in test/labels-reconcile.sh.
+# fixture tests in test/labels-reconcile.test.sh.
 
 HUMAN="${HUMAN_REVIEWER:-danmt}"
 BOTS=()
@@ -394,7 +395,8 @@ reconcile_pr() { # $1 = PR number; relies on the globals set from its fetch
   desired="$(decide_state)"
 
   # encode the runbook's last step for the no-judgment case: every required
-  # verdict is a head-current approval → the human is asked, once. The guard asks whether
+  # verdict is a head-current approval → the human is asked, once. The guard
+  # asks whether
   # a FRESH human review is needed for THIS head — never "has the human ever
   # reviewed", which wedged the handoff after any earlier human comment.
   # Idempotent (a live request suppresses it); race-free via the shared

@@ -1,6 +1,23 @@
 name: labels
 # Reusable half of the labels automation. Triggers and permissions live in
 # the caller; docs/CONSUMERS.md carries the complete caller stub.
+#
+# The caller uses pull_request_target, not pull_request: every PR in this
+# family arrives from a fork, where pull_request runs with a READ-ONLY token
+# and cannot label anything. _target is safe in this workflow because no PR
+# code is ever checked out or executed — labeler reads changed paths via the
+# API, and reconcile checks out the BASE branch only. Keep it that way.
+#
+# There is no pull_request_review_target, so a review landing cannot wake this
+# workflow directly — and the */15 cron is advisory: GitHub deprioritises
+# short intervals hard enough that a quiet repo goes hours between ticks. The
+# handoff wakes the sweep itself: the author sets state:needs-human, and the
+# caller's `labeled` event confirms or corrects that optimistic write within
+# seconds. The cron stays as the last resort for a forgotten handoff.
+#
+# This cannot loop: reconciler writes use GITHUB_TOKEN, and GitHub does not
+# create workflow runs from GITHUB_TOKEN-triggered events. Agent writes use a
+# PAT and therefore do trigger — exactly the asymmetry wanted.
 on:
   workflow_call:
 
@@ -24,6 +41,7 @@ jobs:
     steps:
       - uses: actions/labeler@v5
         with:
+          # labeler reads the consumer's .github/labeler.yml via the API
           # additive only — a hand-applied scope must survive the machine
           sync-labels: false
 
