@@ -1,0 +1,25 @@
+name: Drill recorded
+description: >-
+  Assert a release tree carries its drill record — the release-evidence
+  gate, keyed on the tree's version (from box, where box#95, box#114 and
+  box#148 all shipped with no drill because the gate was only a sentence in
+  CONTRIBUTING). The caller must have checked out its own repository first:
+  the guard reads the consumer's tree at the workspace.
+inputs:
+  version-source:
+    description: Where the tree's version lives ("file" or "package-json")
+    required: false
+    default: file
+  drills-dir:
+    description: Directory of drill records, relative to the workspace
+    required: false
+    default: drills
+runs:
+  using: composite
+  steps:
+    - name: drill recorded
+      shell: bash
+      env:
+        DRILLS_DIR: ${{ inputs.drills-dir }}
+        VERSION_SOURCE: ${{ inputs.version-source }}
+      run: bash "$GITHUB_ACTION_PATH/drill-recorded.sh"
