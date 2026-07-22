@@ -28,4 +28,9 @@ jobs:
       - name: Actionlint
         run: bash .github/scripts/actionlint-all.sh
       - name: Tests
+        env:
+          # The npm-backed version_write case may skip locally when npm is
+          # absent; in CI a skip must be a failure, or the case could
+          # quietly stop running (issue #3's test contract).
+          CEREMONY_REQUIRE_NPM: 1
         run: bash test/run.sh
