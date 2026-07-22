@@ -1,0 +1,27 @@
+name: release
+# Ceremony's own caller — the dogfood of issue #11. This is the consumer
+# stub from docs/CONSUMERS.md with ONE deviation, and consumers must NEVER
+# copy it: `uses:` below is a LOCAL path, so every run executes THIS tree's
+# release.yml. No pin is the point here — ceremony's own release cannot
+# check out a tag that the very run creates (#9's self-consumption bypass
+# is the same fact one layer down) — and would be a bug anywhere else: a
+# consumer without a pin rides main and eats every unreleased change.
+# Consumers write:
+#   uses: heavy-duty/ceremony/.github/workflows/release.yml@<pinned-tag>
+on:
+  # ONE push key, both filters — YAML maps are last-key-wins; a second
+  # sibling `push:` silently replaces the first and kills a door (rig's
+  # review catch).
+  push:
+    tags: ["**"]      # every tag — a wrong tag must FAIL the assert loudly,
+                      # never be skipped by a shape filter that didn't match
+    branches: [main]
+permissions:
+  contents: write       # tag ref create + release create + the bump push
+  pull-requests: write  # decide's label read; the bump-fallback `gh pr create`
+  issues: write         # --label on that fallback PR rides the issues API
+jobs:
+  release:
+    uses: ./.github/workflows/release.yml
+    with:
+      version-source: file

@@ -51,33 +51,42 @@ jobs:
     if: github.event_name == 'pull_request'
     uses: ./.github/workflows/release-exercise.yml
 
-  # Exercises the composite actions the way a consumer does — action.yml
-  # resolving, $GITHUB_ACTION_PATH, the relative lib sourcing — which the
-  # test suite, driving the scripts directly, cannot prove (issue #5's
-  # acceptance criterion).
+  # The self-guards (issue #11): this repo eats exactly what it serves. The
+  # three guard actions run against the REAL tree — VERSION, CHANGELOG.md,
+  # drills/ — through the same `uses:` steps every consumer's CI carries.
+  # These steps are also the composite-action wiring proof (issue #5's
+  # acceptance criterion: action.yml resolving, $GITHUB_ACTION_PATH, the
+  # relative lib sourcing) that action-exercise carried with scratch files
+  # while this repo had no tree of its own to guard; the armed and
+  # drill-recorded scratch steps moved here per the armed step's own
+  # eviction note — the file backend hardcodes the VERSION name, so a
+  # scratch write would SHADOW the real file, not sit beside it.
+  self-guards:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The monotonic guard compares HEAD against the merge base; a
+          # shallow checkout cannot resolve it, and in CI that is a hard
+          # failure, not a skip (the action's description).
+          fetch-depth: 0
+      - uses: ./actions/changelog-armed
+      - uses: ./actions/changelog-monotonic
+      - uses: ./actions/drill-recorded
+
+  # Exercises changelog-monotonic the way a consumer does, against a
+  # CONSTRUCTED history. The self-guards job above runs the same action on
+  # the real tree, but there its containment half is only as interesting as
+  # the PR's own diff; this job commits a known base and an insert-above
+  # edit on top, so a real, non-vacuous containment run is standing
+  # evidence on every PR. (Armed and drill-recorded moved to self-guards —
+  # the real tree now exercises them; monotonic stays because it reads no
+  # version source, so it is immune to the VERSION-shadowing problem that
+  # evicted the other two.)
   action-exercise:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Construct an armed scratch tree in the workspace
-        # This repo carries no VERSION or CHANGELOG.md of its own (until
-        # #11 dogfoods); the guard reads the workspace, so give it a
-        # transient armed tree there. The changelog is scratch-named so a
-        # future real CHANGELOG.md is never shadowed; VERSION cannot be —
-        # the file backend hardcodes it — so if #11 ever adds a real one,
-        # this write must go.
-        run: |
-          printf '0.0.1-dev\n' > VERSION
-          printf '# Changelog\n\n## Unreleased\n\n- Scratch entry.\n' > CHANGELOG.scratch.md
-      - uses: ./actions/changelog-armed
-        with:
-          changelog: CHANGELOG.scratch.md
-      # The same scratch tree exercises drill-recorded: 0.0.1-dev is a
-      # development tree, so the guard proves its wiring (action.yml,
-      # $GITHUB_ACTION_PATH, the lib sourcing) through the nothing-to-assert
-      # path — the state every consumer PR is in. The bare path is the test
-      # suite's job.
-      - uses: ./actions/drill-recorded
       - name: Construct a scratch history for the monotonic guard
         # The monotonic guard's input is a DIFF, so its exercise needs
         # history, not just a file: commit a scratch changelog, mark that
@@ -86,9 +95,9 @@ jobs:
         # base ref is the in-job branch, passed explicitly, because this
         # job's shallow PR checkout carries no origin/main for the input's
         # default to resolve (consumers get that via fetch-depth: 0, per
-        # the action's description). Scratch-named file for the same
-        # shadowing reason as above; the commits live only in this job's
-        # checkout and are never pushed.
+        # the action's description). Scratch-named file so the real
+        # CHANGELOG.md is never shadowed; the commits live only in this
+        # job's checkout and are never pushed.
         run: |
           git config user.name ceremony-ci
           git config user.email ceremony-ci@users.noreply.github.com
