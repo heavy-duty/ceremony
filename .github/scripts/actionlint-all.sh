@@ -4,10 +4,9 @@ set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 mapfile -t files < <(
-  {
-    git ls-files '.github/workflows/*.yml'
-    git ls-files 'actions/*/action.yml'
-  } | sort -u
+  # actionlint validates workflow syntax, not composite action metadata;
+  # feeding action.yml to it misclassifies the file as a workflow.
+  git ls-files '.github/workflows/*.yml' | sort -u
 )
 
 [ "${#files[@]}" -gt 0 ] || {
@@ -18,4 +17,3 @@ mapfile -t files < <(
 printf 'actionlint: linting %d files\n' "${#files[@]}"
 printf '  %s\n' "${files[@]}"
 actionlint "${files[@]}"
-

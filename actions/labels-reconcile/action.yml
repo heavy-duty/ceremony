@@ -1,0 +1,29 @@
+name: Reconcile labels
+description: Converge PR state and optionally bootstrap the label taxonomy
+inputs:
+  bootstrap:
+    description: Whether to bootstrap labels before reconciling (yes or no)
+    required: true
+    default: "no"
+runs:
+  using: composite
+  steps:
+    - name: validate bootstrap input
+      shell: bash
+      env:
+        BOOTSTRAP: ${{ inputs.bootstrap }}
+      run: |
+        case "$BOOTSTRAP" in
+          yes | no) ;;
+          *) echo "bootstrap must be 'yes' or 'no'" >&2; exit 2 ;;
+        esac
+    - name: reconcile labels
+      shell: bash
+      env:
+        BOOTSTRAP: ${{ inputs.bootstrap }}
+        LABELS_CONF: ${{ github.workspace }}/.github/labels.conf
+      run: |
+        if [ "$BOOTSTRAP" = yes ]; then
+          export GITHUB_EVENT_NAME=workflow_dispatch
+        fi
+        bash "$GITHUB_ACTION_PATH/labels-reconcile.sh"
