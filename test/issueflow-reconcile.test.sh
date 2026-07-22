@@ -34,6 +34,7 @@ check "claim with open PR stays claimed" 0 "KEEP" claim_decision 1 true 999999
 check "recent claim without PR stays claimed" 0 "KEEP" claim_decision 1 false 60
 check "unassigned claim is flagged" 0 "FLAG_UNASSIGNED" claim_decision 0 false 60
 check "quiet claim without PR is reclaimed" 0 "RECLAIM" claim_decision 1 false $((STALE_AFTER + 1))
+check "quiet unassigned claim is also reclaimed" 0 "RECLAIM" claim_decision 0 false $((STALE_AFTER + 1))
 
 # Invariant 3: blocked declarations parse and release only when all close.
 refs="$(blocked_references <<< $'Context #99\nBlocked by #12 and #7')"

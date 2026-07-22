@@ -78,9 +78,9 @@ author_decision() { # $1 = true when author is triage; labels on stdin
 
 claim_decision() { # $1 assignee count, $2 linked open PR, $3 age seconds
   local assignees="$1" open_pr="$2" age="$3"
-  if [ "$assignees" -eq 0 ]; then echo FLAG_UNASSIGNED
-  elif [ "$open_pr" = true ] || [ "$age" -le "$STALE_AFTER" ]; then echo KEEP
-  else echo RECLAIM
+  if [ "$open_pr" = false ] && [ "$age" -gt "$STALE_AFTER" ]; then echo RECLAIM
+  elif [ "$assignees" -eq 0 ]; then echo FLAG_UNASSIGNED
+  else echo KEEP
   fi
 }
 
@@ -186,8 +186,12 @@ reconcile_issue() {
         ensure_comment "$n" claim-reclaimed \
           'This claim has no linked open PR and no activity for 48 hours. The sweep is reclaiming it for the ready queue.'
         owners="$(jq -r '[.assignees[].login] | join(",")' <<<"$ISSUE_JSON")"
-        run gh issue edit "$n" -R "$REPO" --remove-assignee "$owners" \
-          --remove-label claimed --add-label ready >/dev/null
+        if [ -n "$owners" ]; then
+          run gh issue edit "$n" -R "$REPO" --remove-assignee "$owners" \
+            --remove-label claimed --add-label ready >/dev/null
+        else
+          run gh issue edit "$n" -R "$REPO" --remove-label claimed --add-label ready >/dev/null
+        fi
         log "#$n: stale claim reclaimed -> ready" ;;
     esac
   elif has_issue_label blocked; then

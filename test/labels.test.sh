@@ -12,6 +12,7 @@ trap 'rm -rf "$TMP"' EXIT
 
 printf '%s\n' \
   'panel=one two three' \
+  'triage-actors=triage-one' \
   '' \
   'scope:one|C5DEF5|First scope' \
   'scope:two|C5DEF5|Second scope' >"$TMP/good.conf"
@@ -24,6 +25,10 @@ check "panel is parsed" 0 "one two three" bash -c \
 # shellcheck disable=SC2016 # expansion belongs to the nested bash
 check "core and config rows merge" 0 "scope:two|C5DEF5|Second scope" bash -c \
   'source "$1"; core_label_rows; configured_label_rows "$2"' _ \
+  "$ROOT/actions/labels-reconcile/labels-reconcile.sh" "$TMP/good.conf"
+# shellcheck disable=SC2016 # expansion belongs to the nested bash
+check "triage config is not parsed as a label row" 1 "" bash -c \
+  'source "$1"; configured_label_rows "$2" | grep -F triage-actors' _ \
   "$ROOT/actions/labels-reconcile/labels-reconcile.sh" "$TMP/good.conf"
 check "missing scope config is an empty table" 0 "" configured_label_rows "$TMP/missing.conf"
 
