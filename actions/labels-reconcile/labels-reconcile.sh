@@ -78,6 +78,7 @@ load_config() { # $1 = consumer labels.conf; panel is mandatory, scopes optional
           return 1
         }
         ;;
+      triage-actors=*) ;;
       *) parse_label_row "$line" >/dev/null || return ;;
     esac
   done <"$conf"
@@ -102,7 +103,7 @@ configured_label_rows() { # validated scope rows, excluding the panel setting
   [ -f "$conf" ] || return 0
   while IFS= read -r line || [ -n "$line" ]; do
     [ -n "$line" ] || continue
-    case "$line" in panel=*) continue ;; esac
+    case "$line" in panel=* | triage-actors=*) continue ;; esac
     parse_label_row "$line" || return
   done <"$conf"
 }

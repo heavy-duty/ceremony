@@ -1,0 +1,10 @@
+name: Reconcile issue flow
+description: Converge the issue work queue and reclaim stale claims
+runs:
+  using: composite
+  steps:
+    - name: reconcile issue flow
+      shell: bash
+      env:
+        LABELS_CONF: ${{ github.workspace }}/.github/labels.conf
+      run: bash "$GITHUB_ACTION_PATH/issueflow-reconcile.sh"

@@ -7,8 +7,8 @@ the labels workflow's bootstrap dispatch (issue #10).
 
 Two state machines share the taxonomy: the **PR machine** (proven in
 box/rig/cast, reconciled by machinery) and the **issue flow** (the
-triage → build queue, doctrine-enforced today, machinery to follow —
-issue #18). One rule joins everything: **states are machine-owned, intent
+triage → build queue, reconciled by the work-queue sweep). One rule joins
+everything: **states are machine-owned, intent
 labels are hand-set** — a hand-moved state label is a lie waiting to happen,
 and the reconciler recomputes it from GitHub's own facts.
 
@@ -54,11 +54,11 @@ strips it on sight).
 | `blocked` | `#6A737D` | waiting on another issue or PR (`Blocked by #N` in the body names it) | triage; anyone may correct it |
 | `epic` | `#5319E7` | organizes other issues via a dependency-ordered task list; **builders never pick an epic** | triage |
 
-The invariant a board scan relies on: every open issue is either
+The work-queue sweep enforces the invariant a board scan relies on: every open issue is either
 `needs-triage`, `epic`, or carries exactly one of `ready` / `claimed` /
-`blocked`. A `claimed` issue with no open PR and no activity is what the
-staleness sweep will reclaim (issue #18); until that machinery exists,
-[TRIAGE.md](TRIAGE.md) owns the hygiene by hand.
+`blocked`. It flags conflicts rather than guessing intent. A `claimed` issue
+with no open PR and no activity for 48 hours is reclaimed by the sweep: it
+comments, unassigns the stale owner, and restores `ready`.
 
 ## Cross-cutting (PRs and issues)
 
@@ -114,7 +114,7 @@ on a PR would say the same thing twice and drift.
 
 The labels workflow (issue #10) recomputes PR state statelessly on PR events
 plus a 15-minute advisory cron, and bootstraps this taxonomy idempotently on
-manual dispatch. Issue-flow labels are doctrine-owned until #18 lands
-machinery for them. Default GitHub labels (`duplicate`, `invalid`,
+manual dispatch. The same workflow reconciles issue-flow labels on issue
+events and during the scheduled sweep. Default GitHub labels (`duplicate`, `invalid`,
 `question`, `wontfix`, `help wanted`, `good first issue`) are deleted at
 bootstrap — a `question` is a discussion, not an issue.
