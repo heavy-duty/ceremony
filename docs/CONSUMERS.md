@@ -297,13 +297,19 @@ Bumping the pin re-syncs the mirror in the same PR —
   updates ([#1 D2](https://github.com/heavy-duty/ceremony/issues/1)).
   Every `uses:` of this repo in the consumer — the two workflow callers
   and the guard steps — names the same tag.
-- **Bump by PR.** Before bumping, read the ceremony's own `CHANGELOG.md`
-  section for the new version (the release body on its
+- **Bump by PR, every reference together.** Before bumping, read the
+  ceremony's own `CHANGELOG.md` section for the new version (the release
+  body on its
   [releases page](https://github.com/heavy-duty/ceremony/releases) is
-  that section, verbatim). A repo that has adopted the agent team flow
-  bumps pin and mirror together —
-  [the pin-bump procedure](#the-pin-bump-procedure); a release-only repo's
-  bump is the one-line `uses:` change.
+  that section, verbatim). One bump PR updates **every** ceremony `uses:`
+  reference in the repo to the new tag — the workflow callers *and* each
+  guard step; a release-only setup already has four (the
+  [release caller](#release-workflow) plus the
+  [three CI guards](#bootstrap-a-new-repo)), and changing only one line
+  leaves the consumer split across ceremony versions, which the same-tag
+  rule above forbids. A repo that has adopted the agent team flow
+  additionally bumps the mirror in the same PR —
+  [the pin-bump procedure](#the-pin-bump-procedure).
 - **One pin governs machinery and doctrine.** The ref in the consumer's
   `release.yml` `uses:` line is the single pin: `docs-sync` reads it from
   exactly there and verifies the `.ceremony/` mirror against it — there
@@ -376,8 +382,10 @@ this is the checklist:
 
 ### The pin-bump procedure
 
-Bumping the ceremony pin is **one PR carrying both halves**: the pin-line
-change in the workflow callers, and the re-synced `.ceremony/` mirror —
+Bumping the ceremony pin is **one PR carrying both halves**: every
+ceremony `uses:` reference — the workflow callers *and* each guard step,
+[all to the same new tag](#version-pinning) — and the re-synced
+`.ceremony/` mirror —
 run `docs-sync --fix` locally, or let the red `--check` on the bump PR
 tell you what is stale. The CI guard is what makes a half-done bump —
 pin without mirror, or mirror without pin — unmergeable (#19). This is

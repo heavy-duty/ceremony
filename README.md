@@ -98,7 +98,7 @@ and double-publish — and that job is the release's only chance to publish
 
 The merge door runs on **every** push to main, and the `release` label
 legitimately means two things (release ceremonies, and ordinary work *on*
-the release machinery), so the door's first act is a decision: the 5-state
+the release machinery), so the door's first act is a decision: the six-row
 table in [lib/decide.sh](lib/decide.sh#L29-L61) (issue #8 — the comment
 block *is* the spec, and the table is contract-tested offline). Rendered
 for operators:
