@@ -63,12 +63,33 @@ jobs:
           repository: ${{ github.repository }}
           ref: ${{ github.event.repository.default_branch }}
       - uses: actions/checkout@v4
+        # The self-consumption bypass — release.yml's twin, and load-bearing
+        # for the same reason (#11): ceremony's own labels bootstrap must
+        # run BEFORE any release tag exists for this checkout to fetch — the
+        # release label the merge door reads is created by that dispatch, so
+        # without the bypass the first release deadlocks on its own pin. The
+        # base-branch checkout above already IS ceremony on the dogfood
+        # path.
+        if: github.repository != 'heavy-duty/ceremony'
         with:
           repository: heavy-duty/ceremony
           ref: ${{ env.CEREMONY_SELF_REF }}
           path: .ceremony-src
+      # Two steps, mutually exclusive `if:`s, because a `uses:` path must be
+      # a literal — the same fork release.yml's CEREMONY_DIR env line
+      # papers over for `run:` steps, which composite `uses:` has no
+      # equivalent of.
       - name: reconcile state + stale
+        if: github.repository != 'heavy-duty/ceremony'
         uses: ./.ceremony-src/actions/labels-reconcile
+        with:
+          bootstrap: ${{ github.event_name == 'workflow_dispatch' && 'yes' || 'no' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+      - name: reconcile state + stale (dogfood — the workspace IS ceremony)
+        if: github.repository == 'heavy-duty/ceremony'
+        uses: ./actions/labels-reconcile
         with:
           bootstrap: ${{ github.event_name == 'workflow_dispatch' && 'yes' || 'no' }}
         env:

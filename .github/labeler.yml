@@ -1,0 +1,55 @@
+# Path → scope:* mapping for the labels workflow's scope job
+# (actions/labeler@v5; additive only — the reusable workflow keeps
+# sync-labels off, so a hand-applied scope survives the machine). The scope
+# taxonomy itself lives in .github/labels.conf; LABELS.md carries the table
+# these globs implement. Scopes locate, they do not alert — a path that maps
+# to nothing is fine (labeler is advisory), so these rows chase the big
+# surfaces, not every file.
+scope:release-flow:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/release.yml
+          - .github/workflows/self-release.yml
+          - .github/workflows/release-exercise.yml
+          - .github/scripts/self-ref-check.sh
+          - lib/**
+          - bin/**
+          - VERSION
+          - CHANGELOG.md
+          - drills/**
+          - test/decide.test.sh
+          - test/facts.test.sh
+          - test/release-chain.test.sh
+          - test/version.test.sh
+          - test/changelog.test.sh
+          - test/self-ref.test.sh
+scope:guards:
+  - changed-files:
+      - any-glob-to-any-file:
+          - actions/changelog-armed/**
+          - actions/changelog-monotonic/**
+          - actions/drill-recorded/**
+          - test/changelog-armed.test.sh
+          - test/changelog-monotonic.test.sh
+          - test/drill-recorded.test.sh
+scope:labels:
+  - changed-files:
+      - any-glob-to-any-file:
+          - .github/workflows/labels.yml
+          - .github/workflows/self-labels.yml
+          - .github/labeler.yml
+          - .github/labels.conf
+          - actions/labels-reconcile/**
+          - LABELS.md
+          - test/labels.test.sh
+          - test/labels-reconcile.test.sh
+scope:docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README
+          - docs/**
+          - AGENTS.md
+          - BUILDER.md
+          - REVIEWER.md
+          - TRIAGE.md
+          - CONTRIBUTING.md

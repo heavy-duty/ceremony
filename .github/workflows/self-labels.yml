@@ -1,0 +1,18 @@
+name: labels
+# Ceremony's own caller for the labels automation — the dogfood of issue
+# #11, wearing the same local-`uses:` deviation as self-release.yml and the
+# same warning: consumers must NEVER copy the local form (it rides main,
+# unpinned — correct only for the repo that IS the source). Consumers write:
+#   uses: heavy-duty/ceremony/.github/workflows/labels.yml@<pinned-tag>
+on:
+  schedule: [{cron: "*/15 * * * *"}] # advisory; the handoff label is the real wake
+  workflow_dispatch:                 # bootstraps missing labels on a fresh repo
+  pull_request_target:
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+jobs:
+  labels:
+    uses: ./.github/workflows/labels.yml
