@@ -15,3 +15,11 @@ so entries say what changed, cite the issue, and stop.
 - `.github/workflows/release.yml` + `lib/facts.sh` — the reusable two-door release workflow (#9).
 - `.github/workflows/labels.yml` + `actions/labels-reconcile` — label taxonomy bootstrap and PR-state reconciliation (#10).
 - Ceremony adopts its own ceremony: `VERSION`, this changelog, the drill doctrine, the self-callers, and the self-guards in CI (#11).
+
+## 0.1.0 — 2026-07-22
+
+- The first copy of a heading the box#118 rebase shape produces.
+
+## 0.1.0 — 2026-07-22
+
+- The second copy — the entry between the copies is what gets dropped.
