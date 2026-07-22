@@ -72,3 +72,27 @@ jobs:
       - uses: ./actions/changelog-armed
         with:
           changelog: CHANGELOG.scratch.md
+      - name: Construct a scratch history for the monotonic guard
+        # The monotonic guard's input is a DIFF, so its exercise needs
+        # history, not just a file: commit a scratch changelog, mark that
+        # commit as the fixture base, then commit an insert-above edit on
+        # top — a real containment run, not just an action.yml parse. The
+        # base ref is the in-job branch, passed explicitly, because this
+        # job's shallow PR checkout carries no origin/main for the input's
+        # default to resolve (consumers get that via fetch-depth: 0, per
+        # the action's description). Scratch-named file for the same
+        # shadowing reason as above; the commits live only in this job's
+        # checkout and are never pushed.
+        run: |
+          git config user.name ceremony-ci
+          git config user.email ceremony-ci@users.noreply.github.com
+          printf '# Changelog\n\n## Unreleased\n\n## 0.1.0 — 2026-07-01\n\n- Shipped entry.\n' > CHANGELOG.monotonic.scratch.md
+          git add CHANGELOG.monotonic.scratch.md
+          git commit -m 'fixture: monotonic base'
+          git branch monotonic-fixture-base
+          printf '# Changelog\n\n## Unreleased\n\n- Entry inserted above.\n\n## 0.1.0 — 2026-07-01\n\n- Shipped entry.\n' > CHANGELOG.monotonic.scratch.md
+          git commit -am 'fixture: insert above'
+      - uses: ./actions/changelog-monotonic
+        with:
+          changelog: CHANGELOG.monotonic.scratch.md
+          base-ref: monotonic-fixture-base

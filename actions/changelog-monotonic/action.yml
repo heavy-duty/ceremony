@@ -1,0 +1,41 @@
+name: Changelog monotonic
+description: >-
+  Assert shipped release headings are append-only — no '## X.Y.Z' heading
+  present at the merge base may be deleted, and none may be duplicated on
+  HEAD (box#122, caught in review of box#118; ported per cast#133). Needs
+  the HISTORY: the caller's checkout must use fetch-depth: 0, or the base
+  ref will not resolve and strict mode (the default — CI must never skip)
+  fails red with a message naming that fix. Reads no version source — this
+  guard is about the diff, not the tree's version state.
+inputs:
+  base-ref:
+    description: >-
+      The ref containment compares HEAD against. The default resolves the
+      event's base branch — the PR's target on pull_request, the pushed
+      branch itself on push (where containment is vacuous by construction
+      and uniqueness is the half that runs).
+    required: false
+    default: origin/${{ github.base_ref || github.ref_name }}
+  changelog:
+    description: Path to the changelog, relative to the workspace
+    required: false
+    default: CHANGELOG.md
+  strict:
+    description: >-
+      "1" (the default) makes an unresolvable base ref a hard failure
+      instead of a loud skip — a guard that can quietly stop guarding is
+      the failure shape this family of checks exists to refuse. The local
+      default in the script itself stays "0", so a plain working-copy run
+      degrades sensibly.
+    required: false
+    default: "1"
+runs:
+  using: composite
+  steps:
+    - name: changelog monotonic
+      shell: bash
+      env:
+        CHANGELOG_MONOTONIC_BASE: ${{ inputs.base-ref }}
+        CHANGELOG: ${{ inputs.changelog }}
+        CHANGELOG_MONOTONIC_STRICT: ${{ inputs.strict }}
+      run: bash "$GITHUB_ACTION_PATH/changelog-monotonic.sh"
