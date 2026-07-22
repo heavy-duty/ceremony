@@ -113,3 +113,48 @@ rows remain consumer-owned because paths and surfaces differ by repository.
 After adding the caller and configuration, run `workflow_dispatch` once to
 bootstrap labels on a fresh repository. Scheduled and PR-triggered runs only
 reconcile; they do not repeatedly upsert the taxonomy.
+
+## Doctrine mirror
+
+Machinery is consumed by reference — GitHub fetches the workflows and
+actions above from the pin at run time — but documents have no runtime: an
+agent reads the working tree it stands in. So the agent-facing doc set
+(ceremony's `docs/VENDORED.txt`: AGENTS.md, TRIAGE.md, BUILDER.md,
+REVIEWER.md, LABELS.md) is vendored into each consumer at **`.ceremony/`**,
+byte-identical to ceremony at the pin, plus a generated `.ceremony/README.md`
+marking the directory machine-managed. `actions/docs-sync` owns the copy:
+`--fix` writes it (and deletes what the manifest dropped — mirror means
+mirror), `--check` re-diffs it in CI on every PR, so a hand edit or a stale
+pin goes red instead of quietly governing.
+
+The consumer's ci.yml gains the guard alongside the others:
+
+```yaml
+      - uses: actions/checkout@v4
+      - uses: heavy-duty/ceremony/actions/docs-sync@<pinned-tag>
+```
+
+`mode` defaults to `check`. There is no ref input: the action reads the pin
+from the consumer's own `.github/workflows/release.yml` — the same single
+`uses: …/release.yml@<ref>` line that pins the machinery, so one pin governs
+machinery and doctrine alike, and a second pin cannot fall out of sync.
+
+**Bootstrap on adoption**: add the release and labels callers first (the pin
+must exist — the mirror is verified against it), then run `--fix` once from
+the repo root and commit `.ceremony/` together with the callers:
+
+```sh
+curl -fsSL "https://raw.githubusercontent.com/heavy-duty/ceremony/<pinned-tag>/actions/docs-sync/docs-sync.sh" \
+  | bash -s -- --fix
+```
+
+If the repo has no root `AGENTS.md`, `--fix` also scaffolds the thin stub
+that routes agents to `.ceremony/AGENTS.md` — created once, never
+overwritten; it is per-repo content the moment you edit it, so `--check`
+asserts only that it exists.
+
+**The pin-bump procedure**: bumping the pin is one PR — the pin line change
+plus the re-synced mirror (run `--fix` locally, or let the red `--check` on
+the bump PR say what is stale). The guard makes a half-done bump — pin
+without mirror, mirror without pin — unmergeable, which is how a process
+change rolls out: deliberately, per repo, reviewed.
