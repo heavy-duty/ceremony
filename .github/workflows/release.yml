@@ -98,11 +98,15 @@ name: release
 # (lib/version.sh), the 5-state verdict (lib/decide.sh), fact gathering
 # (lib/facts.sh), notes extraction (lib/changelog.sh), and the facts →
 # decide → notes chain is rehearsed end-to-end against fixtures
-# (test/release-chain.test.sh, also run by release-exercise.yml). The YAML
-# itself — checkouts, door gating, step wiring — is covered by actionlint
-# plus one honest gap: the live doors. That gap is closed by #11 (ceremony's
-# own 0.1.0 release runs this exact workflow via a local-path call) and by
-# the #13 pilot's rehearsal.
+# (test/release-chain.test.sh). The merge door's early step sequence — both
+# checkout shapes, both branches of the self-consumption bypass, the
+# CEREMONY_DIR wiring, and the facts → decide → notes steps with their real
+# $GITHUB_OUTPUT plumbing — is executed against a fixture by
+# release-exercise.yml's step-replay job, on every PR via ci.yml. What
+# remains, honestly untested until it runs live: the doors themselves —
+# door gating on a real push event, tag create, publish, and bump. That gap
+# is closed by #11 (ceremony's own 0.1.0 release runs this exact workflow
+# via a local-path call) and by the #13 pilot's rehearsal.
 
 on:
   workflow_call:
