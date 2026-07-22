@@ -1,0 +1,24 @@
+name: Changelog armed
+description: >-
+  Assert the changelog is armed for the tree's version state — the
+  version-keyed guard (box#108, rig#66; the unconditional form was reverted
+  by rig#44 and cast#108). The caller must have checked out its own
+  repository first: the guard reads the consumer's tree at the workspace.
+inputs:
+  version-source:
+    description: Where the tree's version lives ("file" or "package-json")
+    required: false
+    default: file
+  changelog:
+    description: Path to the changelog, relative to the workspace
+    required: false
+    default: CHANGELOG.md
+runs:
+  using: composite
+  steps:
+    - name: changelog armed
+      shell: bash
+      env:
+        CHANGELOG: ${{ inputs.changelog }}
+        VERSION_SOURCE: ${{ inputs.version-source }}
+      run: bash "$GITHUB_ACTION_PATH/changelog-armed.sh"

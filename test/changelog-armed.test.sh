@@ -1,0 +1,215 @@
+#!/usr/bin/env bash
+# Contract tests for actions/changelog-armed (issue #5). Constructed fixture
+# trees — a dir with a changelog plus a VERSION file or package.json, not
+# git repos — the same discipline as the box suite this guard is ported
+# from. set -u, not -e: failing commands are behavior for the harness to
+# inspect.
+set -u
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=test/harness.sh
+. "$ROOT/test/harness.sh"
+
+SCRIPT="$ROOT/actions/changelog-armed/changelog-armed.sh"
+
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
+
+# The guard reads the consumer's tree at its working directory, so every
+# case runs from inside a constructed fixture tree.
+in_tree() {
+  local dir="$1"
+  shift
+  (cd "$TMP/$dir" && bash "$SCRIPT" "$@")
+}
+
+# tree <name> <version> — a fixture tree with a VERSION file; the changelog
+# body arrives on stdin.
+tree() {
+  mkdir -p "$TMP/$1"
+  printf '%s\n' "$2" >"$TMP/$1/VERSION"
+  cat >"$TMP/$1/CHANGELOG.md"
+}
+
+# pkg_tree <name> <version> — the same, package-json backend.
+pkg_tree() {
+  mkdir -p "$TMP/$1"
+  printf '{ "name": "fixture", "version": "%s" }\n' "$2" >"$TMP/$1/package.json"
+  cat >"$TMP/$1/CHANGELOG.md"
+}
+
+# --- the -dev rows: top section MUST be '## Unreleased' ----------------------
+
+tree dev-armed 1.2.4-dev <<'EOF'
+# Changelog
+
+## Unreleased
+
+- Pending entry.
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+check "-dev + Unreleased on top passes" 0 "agrees" in_tree dev-armed
+
+tree dev-stamped 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+check "-dev + stamped top fails" 1 "development tree" in_tree dev-stamped
+check "-dev failure names the file" 1 "CHANGELOG.md" in_tree dev-stamped
+check "-dev failure teaches the re-arm fix" 1 "re-arm" in_tree dev-stamped
+
+# --- the bare rows: both ceremony shapes legal, half-ceremonies refused -----
+
+tree bare-armed 1.2.3 <<'EOF'
+# Changelog
+
+## Unreleased
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+check "bare + re-armed tree passes" 0 "agrees" in_tree bare-armed
+
+tree bare-stamped 1.2.3 <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+
+## 1.2.2 — 2026-07-01
+
+- Older entry.
+EOF
+check "bare + own stamped section on top passes" 0 "agrees" in_tree bare-stamped
+
+tree bare-empty-stamp 1.2.3 <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+## 1.2.2 — 2026-07-01
+
+- Older entry.
+EOF
+check "bare + own stamped section but EMPTY fails" 1 "no non-empty" \
+  in_tree bare-empty-stamp
+
+tree bare-wrong-stamp 1.2.3 <<'EOF'
+# Changelog
+
+## 9.9.9 — 2026-07-20
+
+- An entry under the wrong number.
+EOF
+check "bare + top section naming another version fails" 1 "stamped the wrong number" \
+  in_tree bare-wrong-stamp
+
+tree bare-half-ceremony 1.2.3 <<'EOF'
+# Changelog
+
+## Unreleased
+
+- Pending entry that was never stamped.
+
+## 1.2.2 — 2026-07-01
+
+- Older entry.
+EOF
+check "bare + no section for the version anywhere fails" 1 "HALF-DONE ceremony" \
+  in_tree bare-half-ceremony
+
+# Whole-version matching: 1.2.3 must not be satisfied by a 1.2.3-rc1 section.
+tree bare-rc-only 1.2.3 <<'EOF'
+# Changelog
+
+## Unreleased
+
+## 1.2.3-rc1 — 2026-07-15
+
+- The candidate's entry.
+EOF
+check "bare: an rc section never satisfies the bare version" 1 "HALF-DONE ceremony" \
+  in_tree bare-rc-only
+
+# An rc is a pre-release, not a dev tree (#3's version_is_dev): it keys on
+# the bare rules, so a stamped rc section of its own is shippable.
+tree rc-stamped 2.0.0-rc1 <<'EOF'
+# Changelog
+
+## Unreleased
+
+## 2.0.0-rc1 — 2026-07-20
+
+- The candidate's entry.
+EOF
+check "rc keys as bare, own stamped section passes" 0 "agrees" in_tree rc-stamped
+
+# --- degenerate trees --------------------------------------------------------
+
+tree no-sections 1.2.3-dev <<'EOF'
+# Changelog
+
+Only preamble prose, no sections.
+EOF
+check "changelog with no '## ' at all fails" 1 "nothing for a PR entry to land under" \
+  in_tree no-sections
+
+mkdir -p "$TMP/no-changelog"
+printf '1.2.3\n' >"$TMP/no-changelog/VERSION"
+check "missing changelog fails" 1 "no such file" in_tree no-changelog
+
+mkdir -p "$TMP/no-version"
+printf '# Changelog\n\n## Unreleased\n' >"$TMP/no-version/CHANGELOG.md"
+check "missing version source fails" 1 "cannot read the version" in_tree no-version
+
+check "unknown version-source refused" 1 "unknown backend" \
+  in_tree dev-armed CHANGELOG.md carrier-pigeon
+
+# --- the package-json backend ------------------------------------------------
+
+pkg_tree pkg-dev-armed 0.2.0-dev <<'EOF'
+# Changelog
+
+## Unreleased
+
+- Pending entry.
+
+## 0.1.0 — 2026-07-20
+
+- The shipped entry.
+EOF
+check "package-json: -dev + armed passes" 0 "agrees" \
+  in_tree pkg-dev-armed CHANGELOG.md package-json
+
+pkg_tree pkg-bare-armed 0.1.0 <<'EOF'
+# Changelog
+
+## Unreleased
+
+## 0.1.0 — 2026-07-20
+
+- The shipped entry.
+EOF
+check "package-json: bare + armed passes" 0 "agrees" \
+  in_tree pkg-bare-armed CHANGELOG.md package-json
+
+# --- the action's wiring: inputs arrive as env vars --------------------------
+
+mkdir -p "$TMP/env-tree"
+printf '1.2.4-dev\n' >"$TMP/env-tree/VERSION"
+printf '# Changelog\n\n## Unreleased\n\n- Pending.\n' >"$TMP/env-tree/NOTES.md"
+# A non-default changelog name proves the env var is honored, not the default.
+env_tree() {
+  (cd "$TMP/env-tree" && CHANGELOG=NOTES.md VERSION_SOURCE=file bash "$SCRIPT")
+}
+check "env vars drive the script the way action.yml does" 0 "agrees" env_tree
+
+summary
