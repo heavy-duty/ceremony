@@ -29,5 +29,4 @@ mapfile -t files < <(
 
 printf 'shellcheck: linting %d tracked scripts\n' "${#files[@]}"
 printf '  %s\n' "${files[@]}"
-shellcheck -x ${files[@]}
-
+shellcheck -x "${files[@]}"
