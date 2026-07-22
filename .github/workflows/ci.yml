@@ -22,11 +22,10 @@ jobs:
           ACTIONLINT_VERSION: 1.7.12
         run: |
           curl -fsSLo actionlint.tar.gz \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_x86_64.tar.gz"
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
           tar -xzf actionlint.tar.gz actionlint
           sudo install actionlint /usr/local/bin/actionlint
       - name: Actionlint
         run: bash .github/scripts/actionlint-all.sh
       - name: Tests
         run: bash test/run.sh
-
