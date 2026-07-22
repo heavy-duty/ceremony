@@ -143,24 +143,7 @@ last_issue_activity() {
 }
 
 reconcile_issue() {
-  local n="$1" author triage=false decision refs states age assignees open_pr=false remove="" label owners
-  author="$(jq -r '.user.login' <<<"$ISSUE_JSON")"
-  is_triage_actor "$author" && triage=true
-  decision="$(author_decision "$triage" <<<"$ISSUE_LABELS")"
-  if [ "$decision" = ADD_NEEDS_TRIAGE ]; then
-    for label in epic "${QUEUE_LABELS[@]}"; do
-      has_issue_label "$label" && remove="$remove,$label"
-    done
-    remove="${remove#,}"
-    if [ -n "$remove" ]; then
-      run gh issue edit "$n" -R "$REPO" --add-label needs-triage --remove-label "$remove" >/dev/null
-    else
-      run gh issue edit "$n" -R "$REPO" --add-label needs-triage >/dev/null
-    fi
-    log "#$n: needs-triage (opened by $author)"
-    ISSUE_LABELS=needs-triage
-  fi
-
+  local n="$1" decision refs states age assignees open_pr=false label owners
   decision="$(queue_decision <<<"$ISSUE_LABELS")"
   case "$decision" in
     ADD_NEEDS_TRIAGE)
@@ -219,12 +202,35 @@ reconcile_issue() {
   fi
 }
 
+reconcile_opened_issue() {
+  local n="$1" author triage=false labels remove="" label
+  ISSUE_JSON="$(gh api "repos/$REPO/issues/$n")"
+  jq -e 'has("pull_request") | not' <<<"$ISSUE_JSON" >/dev/null || return
+  author="$(jq -r '.user.login' <<<"$ISSUE_JSON")"
+  is_triage_actor "$author" && triage=true
+  labels="$(jq -r '.labels[].name' <<<"$ISSUE_JSON")"
+  [ "$(author_decision "$triage" <<<"$labels")" = ADD_NEEDS_TRIAGE ] || return
+  for label in epic "${QUEUE_LABELS[@]}"; do
+    grep -qxF "$label" <<<"$labels" && remove="$remove,$label"
+  done
+  remove="${remove#,}"
+  if [ -n "$remove" ]; then
+    run gh issue edit "$n" -R "$REPO" --add-label needs-triage --remove-label "$remove" >/dev/null
+  else
+    run gh issue edit "$n" -R "$REPO" --add-label needs-triage >/dev/null
+  fi
+  log "#$n: needs-triage (opened by $author)"
+}
+
 main() {
   local owner name
   REPO="${REPO:?set REPO to owner/name}"
   LABELS_CONF="${LABELS_CONF:-.github/labels.conf}"
   load_issueflow_config "$LABELS_CONF"
   NOW="$(date +%s)"
+  if [ "${EVENT_NAME:-}" = issues ] && [ "${EVENT_ACTION:-}" = opened ]; then
+    reconcile_opened_issue "${EVENT_ISSUE:?set EVENT_ISSUE for issues:opened}"
+  fi
   owner="${REPO%%/*}"
   name="${REPO#*/}"
   OPEN_PR_ISSUES="$(gh api graphql --paginate -f owner="$owner" -f name="$name" -f query='

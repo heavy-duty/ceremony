@@ -7,4 +7,7 @@ runs:
       shell: bash
       env:
         LABELS_CONF: ${{ github.workspace }}/.github/labels.conf
+        EVENT_NAME: ${{ github.event_name }}
+        EVENT_ACTION: ${{ github.event.action }}
+        EVENT_ISSUE: ${{ github.event.issue.number }}
       run: bash "$GITHUB_ACTION_PATH/issueflow-reconcile.sh"

@@ -48,6 +48,7 @@ check "unreadable blocker is flagged" 0 "FLAG_UNPARSEABLE" blocked_decision "12"
 check "triage-authored ready issue is accepted" 0 "KEEP" author_decision true <<<"ready"
 check "outside author receives needs-triage" 0 "ADD_NEEDS_TRIAGE" author_decision false <<<"ready"
 check "outside author already marked needs-triage is stable" 0 "KEEP" author_decision false <<<"needs-triage"
+check "later sweep accepts a normalized outside-authored issue" 0 "KEEP" queue_decision <<<"ready"
 
 # Invariant 5: completed epics get one nudge; incomplete/unparseable do not.
 epic_refs="$(epic_references <<< $'- [ ] #3 first\n- [x] #2 done\nplain #8')"
