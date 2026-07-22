@@ -1,0 +1,20 @@
+<!-- Short on purpose: a template longer than a small PR gets deleted by
+reflex, not read (issue #24). One issue, one PR — draft while building. -->
+
+Closes #
+
+## Acceptance criteria
+
+<!-- The issue's checkboxes, VERBATIM — reviewers diff this against the
+issue. Check them honestly as you go; a criterion you can't check goes back
+to the issue for triage to amend, not silently unshipped. -->
+
+## Changelog
+
+- [ ] One line under `## Unreleased` — inserted **above** the heading below
+      it, never over it — or no behavior change, stated here.
+
+## Round log
+
+<!-- Append each round's summary here: what changed, what was verified.
+Rounds are answered whole — one reply covering every point. -->
