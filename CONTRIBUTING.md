@@ -58,11 +58,33 @@ already proven:
    The label write is optimistic; the reconciler validates it within seconds.
 6. **A human merges.** Nothing else merges.
 
-### Review panel
+### Roster
 
-For this repo: `claude-bot-andresmgsl`, `codex-bot-andresmgsl`,
-`grok-bot-andresmgsl`. The panel is per-repo configuration — each governed
-repo names its own roster in its CONTRIBUTING.
+Five identities share the work (org team `agents`), each living in its own
+[box](https://github.com/heavy-duty/box) — one box per credential, because
+the box is the blast-radius boundary; roles are what a session is told, and
+[AGENTS.md](AGENTS.md) routes from there:
+
+| identity | box (rig tenant) | standing work |
+|---|---|---|
+| `dan-claude-bot` | `triage` (claude-box) | **triage** — the only door issues come through; this identity mints issues and nothing else writes them (#18's `triage-actors`) |
+| `claude-bot-andresmgsl` | claude-box | build (release-flow and guards machinery) + review |
+| `codex-bot-andresmgsl` | codex-box | build (scaffolding, conversions) + review |
+| `grok-bot-andresmgsl` | grok-box | review |
+| `kimi-bot-andresmgsl` | kimi-box | review — builder trial on a small mechanical issue once its verdicts have a track record |
+
+**The review panel for any PR is every bench identity except its author** —
+recusal by construction, enforced by the reconciler (#10): the required
+verdicts are the panel minus the PR's author, so convergence always means
+three cross-vendor approvals of the current head. Builders and triage
+default to different models so the issue contract is honestly exercised —
+a spec gap should surface as a question on the issue, not be silently filled
+by shared priors. Humans (`danmt`) decide in discussions and merge; the
+roster is config, not doctrine — swapping a vendor is an edit to this table
+(and to `panel=` in `.github/labels.conf` once #10 lands), nothing more.
+
+Each governed repo names its own roster in its CONTRIBUTING; this one is
+ceremony's.
 
 ## Code conventions
 
