@@ -5,10 +5,10 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # shellcheck source=lib/changelog.sh
 source "$ROOT/lib/changelog.sh"
 
-changelog="${1:-}"
-ver="${2:-}"
-if [ -z "$changelog" ] || [ -z "$ver" ]; then
-  echo "usage: changelog-section <file> <version>" >&2
+ver="${1:-}"
+changelog="${2:-CHANGELOG.md}"
+if [ -z "$ver" ]; then
+  echo "usage: changelog-section <version> [<changelog>]" >&2
   exit 2
 fi
 [ -f "$changelog" ] || {

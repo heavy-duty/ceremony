@@ -58,17 +58,24 @@ check "empty stamped section returns empty output" 0 "" assert_section 0.5.0 ""
 check "missing section returns empty output" 0 "" assert_section 9.9.9 ""
 
 WRAPPER="$ROOT/bin/changelog-section"
-check "wrapper publishes the requested body" 0 "The seven-oh entry" "$WRAPPER" "$FIXTURE" 0.7.0
-check "wrapper refuses an empty section" 1 "no section for '0.5.0'" "$WRAPPER" "$FIXTURE" 0.5.0
-check "wrapper refuses an absent section" 1 "no section for '9.9.9'" "$WRAPPER" "$FIXTURE" 9.9.9
-check "wrapper explains how the release PR fixes refusal" 1 "stamps the Unreleased section" "$WRAPPER" "$FIXTURE" 9.9.9
-check "wrapper requires both arguments" 2 "usage:" "$WRAPPER"
-check "wrapper refuses a missing file" 1 "no such file" "$WRAPPER" "$TMP/missing.md" 1.0.0
+check "wrapper publishes the requested body" 0 "The seven-oh entry" "$WRAPPER" 0.7.0 "$FIXTURE"
+check "wrapper refuses an empty section" 1 "no section for '0.5.0'" "$WRAPPER" 0.5.0 "$FIXTURE"
+check "wrapper refuses an absent section" 1 "no section for '9.9.9'" "$WRAPPER" 9.9.9 "$FIXTURE"
+check "wrapper explains how the release PR fixes refusal" 1 "stamps the Unreleased section" "$WRAPPER" 9.9.9 "$FIXTURE"
+check "wrapper requires a version" 2 "usage:" "$WRAPPER"
+check "wrapper refuses a missing file" 1 "no such file" "$WRAPPER" 1.0.0 "$TMP/missing.md"
+
+mkdir "$TMP/default-file"
+cp "$FIXTURE" "$TMP/default-file/CHANGELOG.md"
+# The child shell, not this one, expands its positional parameters.
+# shellcheck disable=SC2016
+check "version alone reads the default changelog" 0 "The seven-oh entry" \
+  bash -c 'cd "$1" && "$2" "$3"' _ "$TMP/default-file" "$WRAPPER" 0.7.0
 
 REALISTIC="$ROOT/test/fixtures/CHANGELOG.realistic.md"
 check "realistic changelog keeps its production heading shape" 0 "A mint records its provenance" \
-  "$WRAPPER" "$REALISTIC" 0.9.0
+  "$WRAPPER" 0.9.0 "$REALISTIC"
 check "realistic adjacent release remains independently extractable" 0 "Merging the release PR" \
-  "$WRAPPER" "$REALISTIC" 0.8.0
+  "$WRAPPER" 0.8.0 "$REALISTIC"
 
 summary
