@@ -176,6 +176,103 @@ check "root AGENTS.md missing → check fails, teaching --fix" 1 \
   "run docs-sync --fix" in_consumer fresh --check --source "$SRC"
 in_consumer fresh --fix --source "$SRC" >/dev/null
 
+# --- the README is machine-verified, not just machine-written -------------------
+# The marker that says "a hand edit goes red" must itself go red when
+# hand-edited (kimi-bot, PR #43's review round).
+
+printf 'hand edit\n' >>"$TMP/fresh/.ceremony/README.md"
+check "hand-edited README → check fails naming it" 1 ".ceremony/README.md" \
+  in_consumer fresh --check --source "$SRC"
+check "--fix rewrites the drifted README" 0 "wrote .ceremony/README.md" \
+  in_consumer fresh --fix --source "$SRC"
+
+rm "$TMP/fresh/.ceremony/README.md"
+check "missing README → check fails naming it" 1 \
+  ".ceremony/README.md is missing" in_consumer fresh --check --source "$SRC"
+in_consumer fresh --fix --source "$SRC" >/dev/null
+check "README repaired → check green again" 0 "exact mirror" \
+  in_consumer fresh --check --source "$SRC"
+
+# --- the mirror is plain files: symlinks and friends refused ---------------------
+# PR #43's review round (codex-bot + kimi-bot, independent repros): cp
+# writes THROUGH a committed link, cmp reads through it, and a `find
+# -type f` scan cannot even see it. Both modes refuse; every row with a
+# victim asserts the victim untouched.
+
+consumer sneaky 0.3.0
+in_consumer sneaky --fix --source "$SRC" >/dev/null
+printf 'victim v1\n' >"$TMP/sneaky/victim.md"
+
+rm "$TMP/sneaky/.ceremony/RULES.md"
+ln -s ../victim.md "$TMP/sneaky/.ceremony/RULES.md"
+check "vendored path as symlink → check refuses naming it" 1 \
+  ".ceremony/RULES.md" in_consumer sneaky --check --source "$SRC"
+check "vendored path as symlink → fix refuses (never writes through)" 1 \
+  "non-regular" in_consumer sneaky --fix --source "$SRC"
+check "the link's target is untouched" 0 "victim v1" cat "$TMP/sneaky/victim.md"
+rm "$TMP/sneaky/.ceremony/RULES.md"
+in_consumer sneaky --fix --source "$SRC" >/dev/null
+
+# A stray link is exactly what the -type f extra-file scan was blind to:
+# unlisted doctrine, previously invisible.
+ln -s ../victim.md "$TMP/sneaky/.ceremony/STRAYLINK.md"
+check "stray symlink (invisible to -type f) → check refuses" 1 \
+  "STRAYLINK.md" in_consumer sneaky --check --source "$SRC"
+check "stray symlink → fix refuses too (no silent deletion of a link)" 1 \
+  "STRAYLINK.md" in_consumer sneaky --fix --source "$SRC"
+rm "$TMP/sneaky/.ceremony/STRAYLINK.md"
+
+mkfifo "$TMP/sneaky/.ceremony/PIPE"
+check "a fifo in the mirror → refused, not read" 1 "non-regular" \
+  in_consumer sneaky --check --source "$SRC"
+rm "$TMP/sneaky/.ceremony/PIPE"
+
+rm -rf "$TMP/sneaky/.ceremony/guide"
+mkdir -p "$TMP/sneaky/elsewhere"
+ln -s ../elsewhere "$TMP/sneaky/.ceremony/guide"
+check "vendored subdirectory as symlink → fix refuses" 1 \
+  ".ceremony/guide" in_consumer sneaky --fix --source "$SRC"
+check "nothing was written into the linked directory's target" 1 "" \
+  test -e "$TMP/sneaky/elsewhere/DEEP.md"
+rm "$TMP/sneaky/.ceremony/guide"
+in_consumer sneaky --fix --source "$SRC" >/dev/null
+check "sneaky consumer repaired → check green" 0 "exact mirror" \
+  in_consumer sneaky --check --source "$SRC"
+
+consumer linked-mirror 0.3.0
+mkdir -p "$TMP/linked-mirror-target"
+ln -s ../linked-mirror-target "$TMP/linked-mirror/.ceremony"
+check ".ceremony/ itself a symlink → check refuses" 1 "symlink" \
+  in_consumer linked-mirror --check --source "$SRC"
+check ".ceremony/ itself a symlink → fix refuses" 1 "symlink" \
+  in_consumer linked-mirror --fix --source "$SRC"
+check "the link's target directory stayed empty" 0 "" \
+  test -z "$(ls -A "$TMP/linked-mirror-target")"
+
+consumer linked-stub 0.3.0
+printf 'stub victim\n' >"$TMP/linked-stub/other.md"
+ln -s other.md "$TMP/linked-stub/AGENTS.md"
+check "root AGENTS.md as symlink → check refuses" 1 \
+  "AGENTS.md is a symlink" in_consumer linked-stub --check --source "$SRC"
+check "root AGENTS.md as symlink → fix refuses" 1 \
+  "AGENTS.md is a symlink" in_consumer linked-stub --fix --source "$SRC"
+check "the scaffold did not write through the link" 0 "stub victim" \
+  cat "$TMP/linked-stub/other.md"
+
+# Dangling is the sharpest case: -e is false through a dangling link, so a
+# naive `[ ! -e ] && scaffold` writes the stub through it.
+rm "$TMP/linked-stub/AGENTS.md"
+ln -s does-not-exist.md "$TMP/linked-stub/AGENTS.md"
+check "dangling AGENTS.md symlink → fix refuses (would write through)" 1 \
+  "symlink" in_consumer linked-stub --fix --source "$SRC"
+check "nothing appeared at the dangling target" 1 "" \
+  test -e "$TMP/linked-stub/does-not-exist.md"
+
+rm "$TMP/linked-stub/AGENTS.md"
+mkdir "$TMP/linked-stub/AGENTS.md"
+check "root AGENTS.md as a directory → refused, named" 1 \
+  "not a regular file" in_consumer linked-stub --fix --source "$SRC"
+
 # --- the action's wiring: inputs arrive as env vars -----------------------------
 
 consumer env-wired 0.3.0

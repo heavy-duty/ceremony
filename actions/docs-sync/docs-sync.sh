@@ -39,11 +39,24 @@ set -euo pipefail
 # vendored copy — mirror means mirror, or "extra" files accumulate as
 # unverified doctrine).
 #
+# AND THE MIRROR IS PLAIN FILES. A symlink committed anywhere this tool
+# touches — a vendored path, a subdirectory, `.ceremony/` itself, the root
+# AGENTS.md — redirects the tool outside the mirror: cp writes THROUGH the
+# link (anywhere the CI token can reach), cmp reads through it and reports
+# the target's bytes as the mirror's, and a `find -type f` scan skips link
+# nodes entirely, so the stray poses as doctrine while staying invisible
+# (PR #43's review round, both findings reproduced). So both modes refuse
+# any non-regular node before touching anything: the fix for a symlink is
+# a human deleting it, never a tool following it.
+#
 # TWO FILES ARE SPECIAL, both deliberately:
 #   * `.ceremony/README.md` is GENERATED here — the machine-managed marker
 #     plus where the pin lives — instead of per-file banners, so every
 #     vendored file stays byte-identical to its source and the check is a
-#     plain cmp, never a strip-the-banner parse.
+#     plain cmp, never a strip-the-banner parse. It is verified like
+#     everything else (against the generated text, not the source tree):
+#     the file that says "a hand edit goes red" must itself go red when
+#     hand-edited, or the marker is the one unverified spot in the mirror.
 #   * the consumer's ROOT AGENTS.md is scaffolded once by --fix and never
 #     overwritten. Agent harnesses auto-load root AGENTS.md (the cross-agent
 #     convention), so the stub is what makes "you are a reviewer here" a
@@ -221,6 +234,44 @@ a drill means here, code conventions) live in CONTRIBUTING.md.
 EOF
 }
 
+# --- the mirror is plain files (see the header; PR #43's review round) ----------
+
+# Refusals, not repairs, in BOTH modes — deliberately unlike drift, where
+# --fix is the advertised cure: repairing a symlink means either deleting a
+# node that points somewhere or writing through it, and a tool must do
+# neither on its own. -L before -d/-f everywhere: the test that follows the
+# link is exactly the bug.
+guard_plain_tree() {
+  local offenders
+  if [ -L "$MIRROR" ]; then
+    die "docs-sync: $MIRROR is a symlink, not a directory — a linked mirror" \
+      "  redirects every write outside the tree this tool is allowed to" \
+      "  touch. Refusing both modes: delete the symlink, then re-run" \
+      "  docs-sync --fix."
+  fi
+  if [ -d "$MIRROR" ]; then
+    offenders="$(find "$MIRROR" -mindepth 1 ! -type f ! -type d | LC_ALL=C sort)"
+    [ -z "$offenders" ] || die \
+      "docs-sync: non-regular node(s) in the mirror — a symlink (or fifo," \
+      "  socket, …) under $MIRROR/ makes cp write and cmp read outside the" \
+      "  mirror, and hides from the file scan. Refusing both modes; delete" \
+      "  these by hand, then re-run docs-sync --fix:" \
+      "$offenders"
+  fi
+  if [ -L AGENTS.md ]; then
+    die "docs-sync: the root AGENTS.md is a symlink — the scaffold and the" \
+      "  existence check must never resolve through a link (a dangling one" \
+      "  would even make --fix write through it). Refusing both modes:" \
+      "  replace the symlink with a regular file (or delete it and let" \
+      "  docs-sync --fix scaffold the stub)."
+  fi
+  if [ -e AGENTS.md ] && [ ! -f AGENTS.md ]; then
+    die "docs-sync: the root AGENTS.md exists but is not a regular file —" \
+      "  nothing this tool could do to it is right. Refusing both modes:" \
+      "  remove it, then re-run docs-sync --fix to scaffold the stub."
+  fi
+}
+
 # --- check ----------------------------------------------------------------------
 
 run_check() {
@@ -253,6 +304,18 @@ run_check() {
         "  $MIRROR/ must be vendored and verified, or it poses as doctrine" \
         "  without being checked. Fix: run docs-sync --fix (it deletes orphans)."
     done < <(mirror_files)
+
+    # The README is machine-written against generated text, so it is
+    # machine-verified against the same text — the marker that warns "a hand
+    # edit goes red" is not itself an unverified hole (kimi-bot, PR #43).
+    if [ ! -f "$MIRROR/$README_NAME" ]; then
+      complain "docs-sync: $MIRROR/$README_NAME is missing — the machine-managed" \
+        "  marker is part of the mirror. Fix: run docs-sync --fix."
+    elif ! readme_content | cmp -s - "$MIRROR/$README_NAME"; then
+      complain "docs-sync: $MIRROR/$README_NAME has drifted from its generated" \
+        "  content — the README is machine-written, and a hand edit here is" \
+        "  exactly what its own text warns against. Fix: run docs-sync --fix."
+    fi
   fi
 
   # Existence only, content free: the stub is per-repo the moment the repo
@@ -313,6 +376,7 @@ run_fix() {
   fi
 }
 
+guard_plain_tree
 case "$mode" in
   check) run_check ;;
   fix) run_fix ;;
