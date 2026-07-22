@@ -1,0 +1,102 @@
+# Contributing
+
+This repo defines how the heavy-duty repos work — the release ceremony, the
+label state machine, and the agent team flow — and it runs entirely on its own
+rules. If something here contradicts how this repo actually operates, one of
+the two is a bug.
+
+## The line
+
+Work moves through one pipeline, and every stage has an owner:
+
+```
+discussion ──▶ triage ──▶ issue ──▶ build ──▶ review ──▶ human merge ──▶ release
+ (anyone)     (agent)   (queue)    (agent)   (agents)     (human)      (ceremony)
+```
+
+- **Discussions are where intent lives.** Anyone — human or agent — who has an
+  idea, a bug, a question, or a "we should…" opens a **discussion**, not an
+  issue. Discussions are allowed to be vague; that is what they are for.
+- **Issues are minted only by triage.** Nobody else writes issues — not
+  humans, not builders, not reviewers. An issue is a work order with a quality
+  bar (the issue contract in [TRIAGE.md](TRIAGE.md)), and the bar holds
+  because exactly one role is accountable for it. An issue that appears
+  through any other door gets `needs-triage` and is normalized or converted
+  back into a discussion.
+- **Builders turn one issue into one PR.** [BUILDER.md](BUILDER.md).
+- **Reviewers converge on a verdict.** [REVIEWER.md](REVIEWER.md).
+- **Humans decide twice**: in the discussion (what is worth doing, and any
+  call triage escalates back) and at the merge (whether it ships). Everything
+  between those two points is agent work by default.
+- **Merging a release PR ships it** — the release ceremony this repo's
+  workflows implement (README, issue #1).
+
+Who may set which label is [LABELS.md](LABELS.md)'s contract.
+
+## The PR flow
+
+The same flow the sibling repos run, and the part of this pipeline that is
+already proven:
+
+1. **One issue, one PR**, opened as a **draft** while building, with
+   `Closes #N` in the body. Drafts are invisible to the reviewer panel on
+   purpose. Every behavior change adds one line to `CHANGELOG.md` under
+   `## Unreleased` (insert **above** the heading below — never type over it;
+   the monotonic guard exists because of exactly that edit).
+2. **When it's ready**: mark ready-for-review and request the whole panel.
+3. **Rounds are answered whole.** Wait until every reviewer has a verdict in,
+   then answer the entire round in a **single reply**, push the fixes, and
+   re-request the reviewers that didn't approve. Prefer verification over
+   argument: a test settles what a comment thread can't.
+4. **Reviews end in a verdict** — approve or request-changes, never a bare
+   comment. The verdict carries blockingness only; the body carries the
+   feedback. ([REVIEWER.md](REVIEWER.md) for why a comment-only review stalls
+   the machine.)
+5. **Handoff**: when the round passes — every panel verdict is an approval of
+   the current head and no `blocker:*` label stands — the author posts the
+   round summary, requests the human's review, and sets `state:needs-human`.
+   The label write is optimistic; the reconciler validates it within seconds.
+6. **A human merges.** Nothing else merges.
+
+### Review panel
+
+For this repo: `claude-bot-andresmgsl`, `codex-bot-andresmgsl`,
+`grok-bot-andresmgsl`. The panel is per-repo configuration — each governed
+repo names its own roster in its CONTRIBUTING.
+
+## Code conventions
+
+- Bash: `set -euo pipefail` in executables, `set -u` in test files (the test
+  harness asserts on failing commands, so no `-e` there).
+- **mawk-compatible awk** — CI runners ship mawk, not gawk; no `\x` escapes.
+- **Every piece of logic is a file of its own so a test can drive it.**
+  Workflows and actions gather facts; scripts decide. If a decision lives
+  inline in YAML, it is in the wrong place.
+- Comments carry the *why* — the incident that bought the rule, with its
+  issue number (`box#108`, `rig#66`, …). When porting from a sibling repo,
+  the war stories come along; they are the documentation.
+- Whole-version matching everywhere: `0.7.0` never matches `0.7.0-rc1`.
+- Shellcheck- and actionlint-clean is a CI gate, not a suggestion.
+
+## How the other repos use this
+
+A governed repo (box, rig, cast, incubator, …) does not copy these documents.
+It carries:
+
+- a short header in its own CONTRIBUTING: *"this repo is governed by
+  [heavy-duty/ceremony](https://github.com/heavy-duty/ceremony) at the ref
+  pinned in `.github/workflows/release.yml` — agents read CONTRIBUTING.md,
+  LABELS.md, TRIAGE.md, BUILDER.md and REVIEWER.md there before acting"* —
+  followed by only what is genuinely per-repo:
+  - the **review panel roster**,
+  - the **`scope:*` label set** (`.github/labels.conf` + `.github/labeler.yml`),
+  - the **drill meaning** (`drills/README.md`),
+  - the repo's own code conventions;
+- the thin workflow callers (release, labels) pinned to a ceremony tag;
+- **Discussions enabled**, so the triage door exists.
+
+One pin governs both the machinery and the doctrine: the ref a repo's
+workflows call is the ref its agents read. Bumping the pin is a one-line PR
+and is how a process change rolls out — deliberately, per repo, reviewed.
+The full adoption checklist lives in [docs/CONSUMERS.md](docs/CONSUMERS.md)
+(issue #12).
