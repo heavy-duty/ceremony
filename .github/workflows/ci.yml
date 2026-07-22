@@ -72,6 +72,12 @@ jobs:
       - uses: ./actions/changelog-armed
         with:
           changelog: CHANGELOG.scratch.md
+      # The same scratch tree exercises drill-recorded: 0.0.1-dev is a
+      # development tree, so the guard proves its wiring (action.yml,
+      # $GITHUB_ACTION_PATH, the lib sourcing) through the nothing-to-assert
+      # path — the state every consumer PR is in. The bare path is the test
+      # suite's job.
+      - uses: ./actions/drill-recorded
       - name: Construct a scratch history for the monotonic guard
         # The monotonic guard's input is a DIFF, so its exercise needs
         # history, not just a file: commit a scratch changelog, mark that
