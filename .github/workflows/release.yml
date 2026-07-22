@@ -1,0 +1,369 @@
+name: release
+# THE reusable release workflow — two doors into one act, implemented once
+# for the whole family (issue #9; lineage box#83/#96 · rig#32/#47 ·
+# cast#96/#111 — this essay is condensed from those three sources, and every
+# rule in it was bought with an incident).
+#
+# ## The two doors
+#
+# * The MERGE door: a release is a PR — `release: X.Y.Z`, carrying the
+#   hand-set `release` label, bumping the version from X.Y.Z-dev to bare
+#   X.Y.Z and stamping the changelog — and MERGING it is the ship decision.
+#   The label is the intent, the version transition is the interlock: the
+#   5-state table (lib/decide.sh, issue #8) tells a ceremony apart from
+#   release-flow work under the same label, turns every legitimate
+#   non-ceremony into a green NOTICE no-op, and refuses every half-ceremony
+#   loudly, creating nothing. The job then tags the merge commit via the API
+#   and publishes in the SAME job, on purpose: a GITHUB_TOKEN-created tag
+#   fires no workflows (GitHub's anti-recursion), so that tag can never
+#   re-enter the tag door below and double-publish — this job is the
+#   release's only chance to publish, and the nothing-exists assert covers a
+#   manual tag racing the merge. Afterwards the job re-arms main itself:
+#   bump to X.Y.(Z+1)-dev, pushed directly with the job's token (fires
+#   nothing), falling back to a labeled PR if branch protection refuses —
+#   loudly, never leaving main armed to impersonate the release.
+#
+# * The TAG door: a bare X.Y.Z tag push (no 'v' prefix — box's 0.6.0 set
+#   the scheme) is the documented manual fallback and backfill. The tag must
+#   name the tree's own version; a mismatch fails loudly and creates
+#   nothing. No decide and no label check — the tag is the operator's
+#   explicit act — and no bump: the fallback does not rewrite main (cast's
+#   precedent).
+#
+# Both doors publish the release body from the version's own CHANGELOG.md
+# section (lib/changelog.sh — the one canonical extractor): the curated
+# prose, never the generated PR list. Assets come only from the consumer's
+# optional artifact hook (below); with no hook, GitHub's source tarball for
+# the tag IS the package (box, rig).
+#
+# ## The caller contract
+#
+# This is the consumer's ENTIRE release.yml (also in docs/CONSUMERS.md).
+# Triggers and permissions MUST live in the caller — a called workflow
+# cannot define them:
+#
+#   name: release
+#   on:
+#     # ONE push key, both filters — YAML maps are last-key-wins; a second
+#     # sibling `push:` silently replaces the first and kills a door (rig's
+#     # review catch: the tag fallback had stopped triggering).
+#     push:
+#       tags: ["**"]      # every tag — a wrong tag must FAIL the assert
+#                         # loudly below, never be skipped by a shape
+#                         # filter that didn't match
+#       branches: [main]
+#   permissions:
+#     contents: write       # tag ref create + release create + the bump push
+#     pull-requests: write  # the label read; the bump-fallback `gh pr create`
+#     issues: write         # --label on that fallback PR rides the issues API
+#   jobs:
+#     release:
+#       uses: heavy-duty/ceremony/.github/workflows/release.yml@<pinned-tag>
+#       with:
+#         version-source: file   # or: package-json
+#
+# The called workflow runs in the CALLER's context: the caller's event
+# payload (github.ref / github.sha / github.event.before), the caller's
+# GITHUB_TOKEN, the caller's permission grant. The doors split on the pushed
+# ref exactly as the sources did, and the anti-recursion property is
+# unchanged: tags and pushes created with GITHUB_TOKEN fire no workflows.
+# The merge door MUST keep riding `push` to main, never `pull_request`: a
+# pull_request run from a public FORK gets a READ-ONLY token that
+# `permissions:` cannot raise (box#97) — and every ceremony PR in this org
+# is cross-repo from a bot fork — so the asserts would pass and the tag
+# create would 403, red on main, every release.
+#
+# ## The self-ref pin (#1 D3)
+#
+# A called workflow file arrives alone; it does not bring its repository.
+# So each door checks out heavy-duty/ceremony at the literal pinned
+# CEREMONY_SELF_REF below (into .ceremony-src, inside the workspace) to get
+# lib/ at run time — except on the dogfood path: when the caller IS
+# heavy-duty/ceremony, the workspace already holds this repo at the merge
+# commit, libs included, and fetching tag X.Y.Z from the very run that
+# creates it would deadlock (#11). Every script call goes through
+# CEREMONY_DIR, so the bypass is one `if:` plus one env line.
+#
+# ## The artifact hook (#1 D4)
+#
+# If the consumer carries .github/actions/release-artifact/action.yml, both
+# doors invoke it — after the tag exists, before `gh release create` — with
+# `version` as input and RELEASE_ASSETS_DIR exported; every file the hook
+# drops there is uploaded as a release asset. Exit non-zero to abort the
+# release. No hook → no assets.
+#
+# ## What is honestly untested
+#
+# Every decision this workflow takes lives in a tested script: version state
+# (lib/version.sh), the 5-state verdict (lib/decide.sh), fact gathering
+# (lib/facts.sh), notes extraction (lib/changelog.sh), and the facts →
+# decide → notes chain is rehearsed end-to-end against fixtures
+# (test/release-chain.test.sh). The merge door's early step sequence — both
+# checkout shapes, both branches of the self-consumption bypass, the
+# CEREMONY_DIR wiring, and the facts → decide → notes steps with their real
+# $GITHUB_OUTPUT plumbing — is executed against a fixture by
+# release-exercise.yml's step-replay job, on every PR via ci.yml. What
+# remains, honestly untested until it runs live: the doors themselves —
+# door gating on a real push event, tag create, publish, and bump. That gap
+# is closed by #11 (ceremony's own 0.1.0 release runs this exact workflow
+# via a local-path call) and by the #13 pilot's rehearsal.
+
+on:
+  workflow_call:
+    inputs:
+      version-source:
+        description: >-
+          Where the tree's version lives: "file" (a VERSION file — box, rig,
+          incubator) or "package-json" (the version field, lockfile kept in
+          sync on bump — cast)
+        type: string
+        required: false
+        default: file
+
+env:
+  # A called workflow arrives without its repository. This literal pin is
+  # stamped by ceremony's own release PR to the version being released —
+  # one more line in the same ritual as stamping the changelog (#11) — and
+  # .github/scripts/self-ref-check.sh fails ceremony's own CI when it is
+  # stale: a stale pin dies here, not in a consumer's release. checkout's
+  # `ref:` accepts ${{ env }}; `uses:` strings do not — which is why the
+  # shared logic arrives as script files via checkout, not as inner `uses:`
+  # references.
+  CEREMONY_SELF_REF: "0.1.0"
+  VERSION_SOURCE: ${{ inputs.version-source }}
+
+jobs:
+  release-on-merge:
+    # The merge door. Gated on the push EVENT as well as the ref (rig's
+    # form): a workflow_dispatch of a caller sitting on main — this repo's
+    # own release-exercise.yml — must stay dry wiring, never a live door.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The pushed head is what ships; its first parent (fetch-depth: 2)
+          # is main the instant before the PR landed, which the version
+          # transition is measured against (lib/facts.sh adds the
+          # belt-and-braces fetch of event.before — cast's precedent).
+          ref: ${{ github.sha }}
+          fetch-depth: 2
+      - uses: actions/checkout@v4
+        # The self-consumption bypass (load-bearing — without it, ceremony's
+        # own release deadlocks): on the dogfood path the workspace IS this
+        # repo at the merge commit, libs included, so nothing is fetched —
+        # the 0.1.0 run would otherwise check out tag 0.1.0, which is
+        # created only AFTER that very run succeeds (#11).
+        if: github.repository != 'heavy-duty/ceremony'
+        with:
+          repository: heavy-duty/ceremony
+          ref: ${{ env.CEREMONY_SELF_REF }}
+          path: .ceremony-src
+      - name: wire CEREMONY_DIR and the assets dir
+        run: |
+          if [ "$GITHUB_REPOSITORY" = "heavy-duty/ceremony" ]; then
+            echo "CEREMONY_DIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          else
+            echo "CEREMONY_DIR=$GITHUB_WORKSPACE/.ceremony-src" >> "$GITHUB_ENV"
+          fi
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          echo "RELEASE_ASSETS_DIR=$RUNNER_TEMP/release-assets" >> "$GITHUB_ENV"
+      - name: gather the facts — version, base version, released, labeled
+        id: facts
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGE_SHA: ${{ github.sha }}
+          EVENT_BEFORE: ${{ github.event.before }}
+        # Facts on stdout in $GITHUB_OUTPUT form, diagnostics on stderr;
+        # the API facts are gathered only in the states that consult them.
+        run: bash "$CEREMONY_DIR/lib/facts.sh" >> "$GITHUB_OUTPUT"
+      - name: 'decide: ceremony, or release-flow work under the label?'
+        id: decide
+        env:
+          VER: ${{ steps.facts.outputs.ver }}
+          BASE_VER: ${{ steps.facts.outputs.base_ver }}
+          RELEASED: ${{ steps.facts.outputs.released }}
+          LABELED: ${{ steps.facts.outputs.labeled }}
+        # The 5-state table lives in lib/decide.sh (issue #8) — pure, so it
+        # is contract-tested offline. `ceremony=no` ends this job green (the
+        # NOTICE already printed); a refusal is red with nothing created.
+        run: |
+          out="$(bash "$CEREMONY_DIR/lib/decide.sh")"
+          printf '%s\n' "$out"
+          printf '%s\n' "$out" | grep '^ceremony=' >> "$GITHUB_OUTPUT"
+      - name: release notes — the version's own changelog section
+        if: steps.decide.outputs.ceremony == 'yes'
+        env:
+          VER: ${{ steps.facts.outputs.ver }}
+        run: |
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/changelog.sh"
+          changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "CHANGELOG.md has no '## $VER' section at the merge commit — the ceremony PR must stamp it; refusing to publish an empty release" >&2
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/notes.md"
+      - name: nothing may exist yet — no tag, no release (re-runs refuse loudly)
+        if: steps.decide.outputs.ceremony == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.facts.outputs.ver }}
+        # What makes a re-run of a completed ceremony refuse instead of
+        # clobber, and what catches a manual tag racing the merge.
+        run: |
+          if git ls-remote --exit-code origin "refs/tags/$VER" >/dev/null 2>&1; then
+            echo "tag '$VER' already exists — this release already happened, or a manual tag won the race; refusing to re-release, creating nothing." >&2
+            exit 1
+          fi
+          if gh release view "$VER" -R "$GITHUB_REPOSITORY" --json name >/dev/null 2>&1; then
+            echo "release '$VER' already exists — refusing to re-release, creating nothing." >&2
+            exit 1
+          fi
+      - name: tag the merge commit — same job as the publish, on purpose
+        if: steps.decide.outputs.ceremony == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.facts.outputs.ver }}
+          MERGE_SHA: ${{ github.sha }}
+        # A GITHUB_TOKEN-created tag triggers nothing (anti-recursion), so
+        # the tag door cannot double-fire off this tag — and this job is
+        # the only chance to publish (the sources' central comment).
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/$VER" -f "sha=$MERGE_SHA"
+      - name: artifact hook — the consumer's own release-artifact action
+        # Runs after the tag exists, before the publish (#1 D4). The local
+        # path resolves in the consumer checkout at the workspace root —
+        # legal in a called workflow because the action is on disk. Hook
+        # contract: drop finished files into $RELEASE_ASSETS_DIR; exit
+        # non-zero to abort the release (docs/CONSUMERS.md).
+        if: steps.decide.outputs.ceremony == 'yes' && hashFiles('.github/actions/release-artifact/action.yml') != ''
+        uses: ./.github/actions/release-artifact
+        with:
+          version: ${{ steps.facts.outputs.ver }}
+      - name: publish the release
+        if: steps.decide.outputs.ceremony == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.facts.outputs.ver }}
+        run: |
+          assets=()
+          for f in "$RELEASE_ASSETS_DIR"/*; do
+            if [ -e "$f" ]; then assets+=("$f"); fi
+          done
+          gh release create "$VER" --verify-tag --title "$VER" \
+            --notes-file "$RUNNER_TEMP/notes.md" -R "$GITHUB_REPOSITORY" \
+            "${assets[@]}"
+      # The post-release bump, folded into the release act (the sources'
+      # operator decision: a mechanical one-liner deserves no PR of its
+      # own). X.Y.(Z+1)-dev is arithmetic, not judgment (version_next_dev
+      # refuses anything but bare X.Y.Z). A GITHUB_TOKEN push fires no
+      # workflows (anti-recursion), so the bump triggers neither this door
+      # nor a red run; should branch protection refuse the direct push, the
+      # step opens the bump PR itself and says so, loudly, instead of
+      # leaving main armed to impersonate the release.
+      - name: bump main to the next -dev — the release re-arms main itself
+        if: steps.decide.outputs.ceremony == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.facts.outputs.ver }}
+        run: |
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/version.sh"
+          next="$(version_next_dev "$VER")"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # main may have moved since the merge; release+1 lands on the
+          # newer head — the intended arithmetic either way (cast's
+          # comment).
+          git fetch origin main
+          git checkout -B main origin/main
+          version_write "$VERSION_SOURCE" "$next"
+          # NEVER `git add -A` here: .ceremony-src sits UNTRACKED in this
+          # workspace on the consumer path, and -A would commit the whole
+          # ceremony checkout into the consumer's main. Exactly the files
+          # the bump wrote, nothing else.
+          case "$VERSION_SOURCE" in
+            file) git add VERSION ;;
+            package-json) git add package.json package-lock.json ;;
+          esac
+          git commit -m "chore: bump main to $next — a dev install must not impersonate $VER"
+          if ! git push origin main; then
+            echo "direct push refused (branch protection?) — opening the bump PR instead" >&2
+            git checkout -b "chore/bump-$next"
+            git push origin "chore/bump-$next"
+            gh pr create -R "$GITHUB_REPOSITORY" --head "chore/bump-$next" \
+              --title "chore: bump main to $next" \
+              --body "The post-release re-arm, opened by release.yml because the direct push was refused. One version bump, nothing else — never leave main armed to impersonate $VER." \
+              --label release
+          fi
+
+  release-on-tag:
+    # The tag door — the manual fallback and backfill. The tag is the
+    # operator's explicit act: no decide, no label check — and no bump
+    # (cast's precedent: the fallback does not rewrite main). Event-gated
+    # like the merge door: dispatch runs stay dry.
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        # The self-consumption bypass — see the merge door's twin step.
+        if: github.repository != 'heavy-duty/ceremony'
+        with:
+          repository: heavy-duty/ceremony
+          ref: ${{ env.CEREMONY_SELF_REF }}
+          path: .ceremony-src
+      - name: wire CEREMONY_DIR and the assets dir
+        run: |
+          if [ "$GITHUB_REPOSITORY" = "heavy-duty/ceremony" ]; then
+            echo "CEREMONY_DIR=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
+          else
+            echo "CEREMONY_DIR=$GITHUB_WORKSPACE/.ceremony-src" >> "$GITHUB_ENV"
+          fi
+          mkdir -p "$RUNNER_TEMP/release-assets"
+          echo "RELEASE_ASSETS_DIR=$RUNNER_TEMP/release-assets" >> "$GITHUB_ENV"
+      - name: the tag must name the tree's own version
+        id: assert
+        run: |
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/version.sh"
+          ver="$(version_read "$VERSION_SOURCE")"
+          if [ "$GITHUB_REF_NAME" != "$ver" ]; then
+            echo "tag '$GITHUB_REF_NAME' does not match the tree's version '$ver' — creating nothing." >&2
+            echo "A release is a PR, then a tag: the release PR bumps the version and stamps the changelog; the tag goes on its MERGE commit. Delete this tag and re-tag the right commit." >&2
+            exit 1
+          fi
+          echo "ver=$ver" >> "$GITHUB_OUTPUT"
+      - name: release notes — the version's own changelog section
+        env:
+          VER: ${{ steps.assert.outputs.ver }}
+        run: |
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/changelog.sh"
+          changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "CHANGELOG.md has no '## $VER' section — stamp the Unreleased section in the release PR before tagging; refusing to publish an empty release" >&2
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/notes.md"
+      - name: artifact hook — the consumer's own release-artifact action
+        # After the tag exists (it fired this door), before the publish —
+        # the same contract as the merge door's twin step.
+        if: hashFiles('.github/actions/release-artifact/action.yml') != ''
+        uses: ./.github/actions/release-artifact
+        with:
+          version: ${{ steps.assert.outputs.ver }}
+      - name: publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VER: ${{ steps.assert.outputs.ver }}
+        run: |
+          assets=()
+          for f in "$RELEASE_ASSETS_DIR"/*; do
+            if [ -e "$f" ]; then assets+=("$f"); fi
+          done
+          gh release create "$VER" --verify-tag --title "$VER" \
+            --notes-file "$RUNNER_TEMP/notes.md" -R "$GITHUB_REPOSITORY" \
+            "${assets[@]}"

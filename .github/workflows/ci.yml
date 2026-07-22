@@ -27,6 +27,10 @@ jobs:
           sudo install actionlint /usr/local/bin/actionlint
       - name: Actionlint
         run: bash .github/scripts/actionlint-all.sh
+      - name: Self-ref pin
+        # The pin rules (issue #9; #1 D3): a stale CEREMONY_SELF_REF fails
+        # CI here, not a consumer's release.
+        run: bash .github/scripts/self-ref-check.sh
       - name: Tests
         env:
           # The npm-backed version_write case may skip locally when npm is
@@ -34,6 +38,18 @@ jobs:
           # quietly stop running (issue #3's test contract).
           CEREMONY_REQUIRE_NPM: 1
         run: bash test/run.sh
+
+  # The release exercise (issue #9's scratch caller) on every PR, so the
+  # parse proof and the merge door's step-replay are standing, reviewable
+  # evidence — not a dispatch someone must remember to run. PR-ONLY, and
+  # the gate is load-bearing: this CI also runs on push to main, and a
+  # workflow_call from THAT context would hand release.yml a genuine
+  # push+refs/heads/main event — the merge door's exact gate — opening a
+  # live door from CI. A pull_request event can never satisfy either
+  # door's `if:`.
+  release-exercise:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/release-exercise.yml
 
   # Exercises the composite actions the way a consumer does — action.yml
   # resolving, $GITHUB_ACTION_PATH, the relative lib sourcing — which the
