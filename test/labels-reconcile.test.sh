@@ -604,5 +604,39 @@ expect "exactly one nudge across both sweeps" \
 expect "no label edit across both sweeps names the ruling flag" \
   no "$(grep -q 'needs-ruling' "$RTMP/edits" 2>/dev/null && echo yes || echo no)"
 
+# -- the sweep wiring observes the existing per-PR skip without writing -------
+blind_main_probe() {
+  (
+    GITHUB_EVENT_NAME=schedule
+    REPO=owner/repo
+    LABELS_CONF=.github/labels.conf
+    gh() {
+      if [ "$1" = label ] && [ "$2" = list ]; then
+        printf 'state:building\nstate:addressing\n'
+      elif [ "$1" = pr ] && [ "$2" = list ]; then
+        printf '101\n102\n'
+      elif [ "$1" = pr ] && [ "$2" = view ]; then
+        printf '{}\n'
+      elif [ "$1" = api ] && [[ "$*" = *"/reviews"* ]]; then
+        return 0
+      elif [ "$1" = api ]; then
+        jq -n --arg n "${*: -1}" \
+          '{draft:false,user:{login:"author"},head:{sha:"head"},labels:[],requested_reviewers:[],created_at:"2026-07-23T00:00:00Z"}'
+      elif [ "$1" = issue ] && [ "$2" = edit ]; then
+        printf 'MUTATION: %s\n' "$*"
+      fi
+    }
+    main
+  )
+}
+
+blind_main="$(blind_main_probe)"
+expect "a wholly blind main sweep emits one actionable annotation" 1 \
+  "$(grep -c '^::warning::.*checks: read.*statuses: read' <<<"$blind_main")"
+expect "a wholly blind main sweep leaves every PR untouched" no \
+  "$(grep -q '^MUTATION:' <<<"$blind_main" && echo yes || echo no)"
+expect "the existing per-PR skip still runs for every blind PR" 2 \
+  "$(grep -c 'could not read mergeability/checks — left alone this pass' <<<"$blind_main")"
+
 printf 'labels-reconcile tests: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
