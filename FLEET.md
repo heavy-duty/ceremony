@@ -46,7 +46,9 @@ Every box runs the same skeleton, adapted to its CLI:
 
 - **Triage:** new discussions to mint from, builder questions on issues, stray
   issues to reconcile, `@`-mentions, hourly hygiene (stale claims, label
-  invariants).
+  invariants), and a `needs-ruling` standing **past 24h** — the ladder's last
+  rung makes the option triage's to pick, and this wake list is where triage
+  learns such an item exists (see the notifier section below).
 - **Builders**, in priority order: **resume** (an open draft PR of mine, or a
   claimed issue with my `build/*` branch but no PR — possible only if a
   previous session died mid-work), a `ready` issue to claim, a completed
@@ -62,10 +64,55 @@ Every box runs the same skeleton, adapted to its CLI:
   (it lags). The request trigger runs first because it reaches repos the list
   does not name.
 
+#### The operator notifier — the `needs-ruling` queue
+
+The operator notifier (`notify.sh`, on the triage box) watches open PRs
+carrying `state:needs-human`. That poll never reads `needs-ruling`, which
+lives mostly on *issues* — so an escalation waits invisibly on the very human
+it names. Not hypothetical: on 2026-07-23 alone, three escalations spent
+their whole lives outside the operator's view — [#16's fork-PR-workflows
+question](https://github.com/heavy-duty/ceremony/issues/16#issuecomment-5053302689)
+(raised 01:23Z, [ruled 09:24Z](https://github.com/heavy-duty/ceremony/issues/16#issuecomment-5056705884)
+— eight hours in which the board showed a `claimed` issue indistinguishable
+from a builder mid-build), [#56's R1–R3
+escalation](https://github.com/heavy-duty/ceremony/issues/56#issuecomment-5057506832),
+and [epic #50's own 13:04Z
+flag](https://github.com/heavy-duty/ceremony/issues/50#issuecomment-5058713181),
+which surfaced only because a human happened to look. This file records how
+the fleet actually runs; that is why this wiring changed (#50 D16). The spec
+for the box-side update:
+
+- **The second query.** Alongside the `state:needs-human` PR poll, `notify.sh`
+  polls **open issues and PRs labelled `needs-ruling`** across every repo in
+  `~/duty/repos.txt`.
+- **One tracked message per item, edited in place** — the same
+  one-message-per-item discipline the PR poll already uses, so an aging
+  ruling reads as a **live queue**, not a feed. The message is removed when
+  the flag comes off. Never one notification per rung: a rung crossing
+  changes the text of the existing message and does not page again.
+- **The message carries what makes the ruling decidable at a glance:** the
+  item, the decision line (the escalation comment's first line), the flag's
+  age, and the current rung.
+- **Rungs are the message's content, never its trigger.** The four rungs are
+  [the ladder's](https://github.com/heavy-duty/ceremony/blob/cb3d482b8be5c6563374a8c52159287fad43644d/LABELS.md#L94-L112)
+  — **0–12h**, **at 12h**, **at 24h**, **past 24h** — with the age measured
+  from the current episode's `needs-ruling` `labeled` event, the same anchor
+  the board-side sweep reads. Division of labor: #73's sweep comments put the
+  rungs on the board for the fleet; the notifier puts them in the operator's
+  queue. Neither decides.
+- **What is worth alerting on:** a `needs-ruling` past its stated `Default:`
+  deadline, or standing past 24h, is the fleet-health signal — not the
+  flag's existence. An escalation resolved inside its window is working as
+  designed and deserves a quiet queue entry, not an alarm.
+
+Nothing box-side ever sets, clears, or decides `needs-ruling` (#50 D9, D15):
+the notifier and triage's past-24h wake above *report and pick up* what the
+board already shows; the label itself moves only by the doctrine's hands.
+
 `~/duty/repos.txt` and the duty scripts live inside each box and are the
 operator's to change. This descriptive edit is the spec for those box-side
-updates; until an operator makes them, the request trigger exists on paper
-only.
+updates; until an operator makes them, the request trigger and the notifier's
+`needs-ruling` queue exist on paper only.
 
 ### Resilience
 
