@@ -256,12 +256,19 @@ on:
     types: [opened, labeled, unlabeled, assigned, unassigned, closed]
 permissions:
   contents: read
+  checks: read          # mergeability/check-rollup read for PR state
+  statuses: read        # commit-status rollup read for PR state
   issues: write
   pull-requests: write
 jobs:
   labels:
     uses: heavy-duty/ceremony/.github/workflows/labels.yml@<pinned-tag>
 ```
+
+Naming any permission sets every unnamed permission to `none`. Public
+repositories allow check data to be read regardless, but a private consumer
+needs both explicit reads above; without them the failure appears as an empty
+`state:*` axis on the board rather than a red workflow run.
 
 The `issues:` trigger is **unreleased** and is not in `0.1.0`. A consumer
 pinned to `0.1.0` omits it. Add it only when bumping every ceremony reference

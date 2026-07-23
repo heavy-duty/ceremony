@@ -38,6 +38,18 @@ rev() { # $1=login $2=state $3=commit $4=body $5=submitted_at → one review obj
 
 reviews() { jq -s '.' <<<"$*"; } # collect review objects into an array
 
+# -- a sweep-wide read failure is visible without changing any PR ------------
+warning="$(blind_sweep_warning 3 3)"
+expect "a wholly blind sweep warns" \
+  "::warning::labels: every open PR was unreadable; grant checks: read and statuses: read in the caller (private repos do not imply them)" \
+  "$warning"
+expect "the blind warning names checks: read" named \
+  "$(grep -qF "checks: read" <<<"$warning" && echo named || echo missing)"
+expect "the blind warning names statuses: read" named \
+  "$(grep -qF "statuses: read" <<<"$warning" && echo named || echo missing)"
+expect "a partially blind sweep does not warn" "" "$(blind_sweep_warning 1 3)"
+expect "a sweep with no open PRs does not warn" "" "$(blind_sweep_warning 0 0)"
+
 # -- drafts are building, whoever is requested --------------------------------
 DRAFT=true HEAD_SHA=head1 REQUESTED="" REVIEWS_JSON='[]'
 expect "draft PR is building" state:building "$(decide_state)"
