@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Byte-wise collation, matching CI: the probes sort ISO timestamps, and the
+# verdict must not flip with the runner's ambient locale.
+export LC_ALL=C
 
 # Fixture tests for the labels-reconcile state machine: a comment is a
 # non-verdict whatever its body says (the AUTHOR escalates by requesting the
@@ -529,7 +532,9 @@ ruling_sweep_probe() { # $1 = the PR's labels → reconcile_pr's log lines
           shift
         done
         file="$RTMP/$(printf '%s' "$endpoint" | tr '/' '_').json"
-        [ -f "$file" ] || { printf '[]\n'; return 0; }
+        # A missing fixture is an empty collection — projected through the
+        # caller's --jq exactly like real gh, so '.[].foo' yields no lines.
+        [ -f "$file" ] || { printf '[]\n' | jq -r "${jqexpr:-.}"; return 0; }
         if [ -n "$jqexpr" ]; then jq -r "$jqexpr" "$file"; else cat "$file"; fi
       elif [ "$1" = issue ] && [ "$2" = comment ]; then
         local n="$3" body="" file
