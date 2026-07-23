@@ -76,6 +76,21 @@ check "both quiet flags still produce one exemption verdict" 0 "EXEMPT" \
 check "blocked does not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt <<<"blocked"
 check "ready does not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt <<<"ready"
 check "empty labels do not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt </dev/null
+check "one closed offsite PR nudges" 0 "NUDGE" offsite_resolved_decision <<<"CLOSED"
+check "two closed offsite PRs nudge" 0 "NUDGE" offsite_resolved_decision <<< $'CLOSED\nCLOSED'
+check "one open offsite PR keeps quiet" 0 "QUIET" offsite_resolved_decision <<< $'CLOSED\nOPEN'
+check "no visible offsite PR keeps quiet" 0 "QUIET" offsite_resolved_decision </dev/null
+check "an unreadable offsite PR keeps quiet" 0 "QUIET" offsite_resolved_decision <<< $'CLOSED\nUNKNOWN'
+
+timeline='[
+  {"event":"cross-referenced","source":{"issue":{"number":112,"repository":{"full_name":"heavy-duty/rig"},"pull_request":{"url":"x"}}}},
+  {"event":"cross-referenced","source":{"issue":{"number":7,"repository":{"full_name":"heavy-duty/rig"}}}},
+  {"event":"mentioned","source":{"issue":{"number":9,"repository":{"full_name":"heavy-duty/box"},"pull_request":{"url":"x"}}}},
+  {"event":"assigned"}
+]'
+check "offsite timeline extracts only cross-referenced PRs" 0 "heavy-duty/rig#112" \
+  offsite_cross_referenced_prs <<<"$timeline"
+check "empty offsite timeline extracts nothing" 0 "" offsite_cross_referenced_prs <<<"[]"
 
 # Invariant 3: blocked declarations parse and release only when all close.
 refs="$(blocked_references <<< $'Context #99. Blocked by #12 (first), #7 (second). Blocks #44.')"
@@ -276,8 +291,6 @@ check "offsite plus needs-ruling stays claimed" 1 "" \
   grep -q 'reclaimed' <<<"$offsite_both"
 check "a one-hour claim stays claimed for the ordinary age reason" 0 "KEEP" \
   claim_decision 1 false 3600
-check "the offsite exemption flag is named once at its issueflow decision point" 0 "1" \
-  grep -c 'offsite' "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
 check "no reconciler mutation names offsite (#68 D4)" 1 "" \
   grep -E 'gh (issue|pr) edit.*offsite' \
     "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh" \
