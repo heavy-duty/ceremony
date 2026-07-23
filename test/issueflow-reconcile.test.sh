@@ -74,6 +74,8 @@ check "needs-ruling still exempts through the shared gate" 0 "EXEMPT" \
 check "both quiet flags still produce one exemption verdict" 0 "EXEMPT" \
   claim_clock_exempt <<< $'offsite\nneeds-ruling'
 check "blocked does not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt <<<"blocked"
+check "attention does not exempt a claimed issue" 0 "SWEEP" \
+  claim_clock_exempt <<<"attention"
 check "ready does not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt <<<"ready"
 check "empty labels do not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt </dev/null
 check "one closed offsite PR nudges" 0 "NUDGE" offsite_resolved_decision <<<"CLOSED"
@@ -182,6 +184,8 @@ check "claimed plus offsite is a healthy issue" 0 "KEEP" \
   queue_decision <<< $'claimed\noffsite'
 check "offsite alone still needs triage" 0 "ADD_NEEDS_TRIAGE" \
   queue_decision <<<"offsite"
+check "claimed plus attention is a healthy issue" 0 "KEEP" \
+  queue_decision <<< $'claimed\nattention'
 
 # ---------------------------------------------------------------------------
 # The ruling pass on the issue surface (#52), against a recording stub: the
