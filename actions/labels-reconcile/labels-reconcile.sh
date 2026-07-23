@@ -408,8 +408,22 @@ epic|5319E7|Organizes other issues via a dependency-ordered task list — builde
 EOF
 }
 
+retired_label_names() { # the GitHub defaults LABELS.md retires — a `question` is a discussion
+  # One registry, kept beside core_label_rows() for the same reason those rows
+  # are not in labels.conf: a rule that must hold in every governed repo
+  # cannot live in a per-repo file. The six names match LABELS.md exactly.
+  cat <<'EOF'
+duplicate
+invalid
+question
+wontfix
+help wanted
+good first issue
+EOF
+}
+
 bootstrap_labels() { # dispatch-only: ~20 upserts is too chatty for every cron tick
-  local rows
+  local rows name
   rows="$(core_label_rows)"
   if [ -f "$LABELS_CONF" ]; then
     rows="$rows
@@ -419,6 +433,21 @@ $(configured_label_rows "$LABELS_CONF")"
     [ -n "$name" ] || continue
     run gh label create "$name" -R "$REPO" --color "$color" --description "$desc" --force
   done <<<"$rows"
+
+  # LABELS.md publishes the defaults as deleted at bootstrap; until #93
+  # nothing deleted them — incubator's first dispatch ran green and left
+  # `good first issue` standing. Deletion is dispatch-only like the upserts,
+  # and never fatal: `gh label delete` exits non-zero on a label that is
+  # already gone, the NORMAL case from the second dispatch on, and under
+  # set -e an unguarded call aborts the whole run (#91's shape). A 403
+  # refusal gets the same tolerance — the bot bootstrap already 403s on
+  # blocker:drill-pending, and a token that cannot delete must still get
+  # the taxonomy it can create. Either way: log the name, keep going.
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    run gh label delete "$name" -R "$REPO" --yes \
+      || log "retire: '$name' not deleted (already absent, or refused) — continuing"
+  done <<<"$(retired_label_names)"
 }
 
 has_label() { grep -qxF "$1" <<<"$LABELS"; }
