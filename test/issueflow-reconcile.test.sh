@@ -253,8 +253,17 @@ cfix() { printf '%s/repos_owner_repo_issues_%s_comments.json' "$TMP" "$1"; }
 jq -n --arg l "$(iso_at $((INOW - 10 * 86400)))" \
   '[{"event":"labeled","label":{"name":"needs-ruling"},"actor":{"login":"setter"},"created_at":$l},
     {"event":"assigned","created_at":$l}]' >"$(tfix 21)"
+# The escalation is conforming and the rung markers are pre-seeded — by 10
+# days in both rungs fired long ago (#73), so this probe observes the nudge
+# wiring alone; shape and rung behavior have their own probes in
+# test/ruling.test.sh.
 jq -n --arg at "$(iso_at $((INOW - 10 * 86400 - 60)))" \
-  '[{"user":{"login":"setter"},"created_at":$at,"html_url":"https://x/esc21","body":"question, options, recommendation"}]' \
+  --arg b $'Options:  A — x   B — y\nRecommend: A, because x.\nBlocked:  z\nDefault:  none — hard block' \
+  --arg r12 "$(iso_at $((INOW - 10 * 86400 + 13 * 3600)))" \
+  --arg r24 "$(iso_at $((INOW - 10 * 86400 + 25 * 3600)))" \
+  '[{"user":{"login":"setter"},"created_at":$at,"html_url":"https://x/esc21","body":$b},
+    {"user":{"login":"sweep-bot"},"created_at":$r12,"html_url":"https://x/r12","body":"<!-- ceremony:needs-ruling-rung12 -->\nrung"},
+    {"user":{"login":"sweep-bot"},"created_at":$r24,"html_url":"https://x/r24","body":"<!-- ceremony:needs-ruling-rung24 -->\nrung"}]' \
   >"$(cfix 21)"
 exempt="$(issue_probe 21 $'claimed\nneeds-ruling')"
 check "a 10-day-quiet claim under a ruling is not reclaimed" 1 "" \

@@ -557,12 +557,22 @@ ruling_sweep_probe() { # $1 = the PR's labels → reconcile_pr's log lines
   )
 }
 
-# The flag went up 8 days ago with its escalation posted seconds earlier.
-jq -n --arg at "$(iso_at $((RNOW - 8 * 86400)))" \
+# The flag went up 10 days ago with its escalation posted seconds earlier;
+# the newest activity is the reviews at 8 days. The escalation is conforming
+# and the rung markers are pre-seeded — by now both rungs fired long ago
+# (#73), older than the reviews so the quiet window still reads 8 days —
+# and this probe observes the nudge wiring alone; shape and rung behavior
+# have their own probes in test/ruling.test.sh.
+jq -n --arg at "$(iso_at $((RNOW - 10 * 86400)))" \
   '[{"event":"labeled","label":{"name":"needs-ruling"},"actor":{"login":"setter"},"created_at":$at}]' \
   >"$RTMP/repos_owner_repo_issues_77_timeline.json"
-jq -n --arg at "$(iso_at $((RNOW - 8 * 86400 - 60)))" \
-  '[{"user":{"login":"setter"},"created_at":$at,"html_url":"https://x/esc77","body":"question, options, recommendation"}]' \
+jq -n --arg at "$(iso_at $((RNOW - 10 * 86400 - 60)))" \
+  --arg b $'Options:  A — x   B — y\nRecommend: A, because x.\nBlocked:  z\nDefault:  none — hard block' \
+  --arg r12 "$(iso_at $((RNOW - 10 * 86400 + 13 * 3600)))" \
+  --arg r24 "$(iso_at $((RNOW - 10 * 86400 + 25 * 3600)))" \
+  '[{"user":{"login":"setter"},"created_at":$at,"html_url":"https://x/esc77","body":$b},
+    {"user":{"login":"sweep-bot"},"created_at":$r12,"html_url":"https://x/r12","body":"<!-- ceremony:needs-ruling-rung12 -->\nrung"},
+    {"user":{"login":"sweep-bot"},"created_at":$r24,"html_url":"https://x/r24","body":"<!-- ceremony:needs-ruling-rung24 -->\nrung"}]' \
   >"$RTMP/repos_owner_repo_issues_77_comments.json"
 
 wired="$(ruling_sweep_probe "needs-ruling")"
