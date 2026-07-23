@@ -366,11 +366,14 @@ reconcile_issue() {
 reconcile_opened_issue() {
   local n="$1" author triage=false labels remove="" label
   ISSUE_JSON="$(gh api "repos/$REPO/issues/$n")"
-  jq -e 'has("pull_request") | not' <<<"$ISSUE_JSON" >/dev/null || return
+  # The stand-downs return 0 explicitly: a bare return carries the failed
+  # test's status, which under execution is live `set -e` — and it killed the
+  # run on every triage-authored mint, before one issue was reconciled (#91).
+  jq -e 'has("pull_request") | not' <<<"$ISSUE_JSON" >/dev/null || return 0
   author="$(jq -r '.user.login' <<<"$ISSUE_JSON")"
   is_triage_actor "$author" && triage=true
   labels="$(jq -r '.labels[].name' <<<"$ISSUE_JSON")"
-  [ "$(author_decision "$triage" <<<"$labels")" = ADD_NEEDS_TRIAGE ] || return
+  [ "$(author_decision "$triage" <<<"$labels")" = ADD_NEEDS_TRIAGE ] || return 0
   for label in epic "${QUEUE_LABELS[@]}"; do
     grep -qxF "$label" <<<"$labels" && remove="$remove,$label"
   done
