@@ -9,6 +9,7 @@ so entries say what changed, cite the issue, and stop.
 - `issueflow-reconcile` — keep cross-repo references out of local dependency decisions and require triage to resolve cross-repo blockers by hand (#61).
 - `needs-ruling` — the cross-cutting flag for a pending human decision, excluded from `state:needs-human` and from the staleness sweep (#51).
 - Cross-repo doctrine: the panel is the PR's repo's roster, a review request is authorization but not panel membership, and `Part of <repo>#N` replaces the `Closes #N` that cannot cross repos (#57).
+- `actions/runner-isolated` — a `pull_request`-triggered job may never run on a self-hosted runner (#58).
 
 ## 0.1.0 — 2026-07-22
 

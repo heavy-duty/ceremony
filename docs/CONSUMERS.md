@@ -70,6 +70,7 @@ the machinery at all:
        - uses: heavy-duty/ceremony/actions/changelog-armed@<pinned-tag>
        - uses: heavy-duty/ceremony/actions/changelog-monotonic@<pinned-tag>
        - uses: heavy-duty/ceremony/actions/drill-recorded@<pinned-tag>
+       - uses: heavy-duty/ceremony/actions/runner-isolated@<pinned-tag>
    ```
 
    `changelog-armed` and `drill-recorded` take
@@ -77,6 +78,15 @@ the machinery at all:
    inputs and defaults are in its `action.yml`
    ([actions/](../actions/)). Adopting the agent team flow adds the
    `docs-sync` step ([below](#adopting-the-agent-team-flow)).
+
+   `runner-isolated` asserts that no `pull_request`-triggered workflow
+   names a self-hosted runner — a PR workflow runs the branch's code, and
+   unreviewed fork code must never execute on your own hardware
+   ([#58](https://github.com/heavy-duty/ceremony/issues/58)). It fires on
+   the PR that first mixes a PR trigger and a self-hosted `runs-on` in
+   one file; the unblock is splitting the workflow. A repo with **no**
+   self-hosted runner still wants it: the guard's value is the day
+   somebody adds one.
 6. **Labels automation** (optional but recommended): the caller from
    [Labels automation](#labels-automation), plus `.github/labels.conf`
    (panel + the repo's `scope:*` rows) and `.github/labeler.yml` (the
@@ -323,9 +333,9 @@ Bumping the pin re-syncs the mirror in the same PR —
   [releases page](https://github.com/heavy-duty/ceremony/releases) is
   that section, verbatim). One bump PR updates **every** ceremony `uses:`
   reference in the repo to the new tag — the workflow callers *and* each
-  guard step; a release-only setup already has four (the
+  guard step; a release-only setup already has five (the
   [release caller](#release-workflow) plus the
-  [three CI guards](#bootstrap-a-new-repo)), and changing only one line
+  [four CI guards](#bootstrap-a-new-repo)), and changing only one line
   leaves the consumer split across ceremony versions, which the same-tag
   rule above forbids. A repo that has adopted the agent team flow
   additionally bumps the mirror in the same PR —
