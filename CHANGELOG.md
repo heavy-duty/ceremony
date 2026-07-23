@@ -12,6 +12,7 @@ so entries say what changed, cite the issue, and stop.
 - `actions/runner-isolated` — a `pull_request`-triggered job may never run on a self-hosted runner (#58).
 - The sweep's `needs-ruling` invariants, one implementation for both surfaces: the issue-side staleness exemption, the bare-flag check (comment-only, the label is never removed), and the 7-day nudge to the decider (#52).
 - `offsite` — protect claimed issues whose PR lives in another repository from the claim-reclaim clock (#68).
+- `issueflow-reconcile` — nudge once when an `offsite` flag outlives every visible cross-referenced PR (#69).
 
 ## 0.1.0 — 2026-07-22
 

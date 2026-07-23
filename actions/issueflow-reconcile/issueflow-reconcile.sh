@@ -192,6 +192,27 @@ epic_decision() { # $1 refs, $2 states
   fi
 }
 
+offsite_cross_referenced_prs() { # timeline JSON on stdin -> owner/repo#N
+  jq -r '
+    .[]
+    | select(.event == "cross-referenced")
+    | .source.issue
+    | select(.pull_request != null)
+    | select(.repository.full_name != null and .number != null)
+    | "\(.repository.full_name)#\(.number)"
+  ' | sort -u
+}
+
+offsite_resolved_decision() { # PR states on stdin -> NUDGE | QUIET
+  local states
+  states="$(cat)"
+  if [ -n "$states" ] && ! grep -Eq '^(OPEN|UNKNOWN)$' <<<"$states"; then
+    echo NUDGE
+  else
+    echo QUIET
+  fi
+}
+
 # API edge. Marker comments make warnings and nudges idempotent across sweeps.
 ensure_comment() { # $1 issue, $2 marker, $3 message
   local n="$1" marker="$2" message="$3"
@@ -208,6 +229,21 @@ reference_states() {
     state="$(gh api "repos/$REPO/issues/$ref" --jq '.state' 2>/dev/null || echo UNKNOWN)"
     case "$state" in open) echo OPEN ;; closed) echo CLOSED ;; *) echo UNKNOWN ;; esac
   done
+}
+
+offsite_pr_states() {
+  local ref repo number state
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    repo="${ref%#*}"
+    number="${ref##*#}"
+    state="$(gh api "repos/$repo/pulls/$number" --jq '.state' 2>/dev/null || echo UNKNOWN)"
+    case "$state" in open) echo OPEN ;; closed) echo CLOSED ;; *) echo UNKNOWN ;; esac
+  done
+}
+
+offsite_timeline() { # unreadable timelines are deliberately silent
+  gh api --paginate "repos/$REPO/issues/$1/timeline" 2>/dev/null || return 1
 }
 
 last_issue_activity() {
@@ -269,6 +305,18 @@ reconcile_issue() {
         fi
         log "#$n: stale claim reclaimed -> ready" ;;
     esac
+    if has_issue_label offsite; then
+      local timeline
+      if timeline="$(offsite_timeline "$n")"; then
+        refs="$(offsite_cross_referenced_prs <<<"$timeline")"
+        states="$(offsite_pr_states <<<"$refs")"
+        if [ "$(offsite_resolved_decision <<<"$states")" = NUDGE ]; then
+          ensure_comment "$n" offsite-resolved \
+            "$(tr '\n' ' ' <<<"$refs" | sed 's/[[:space:]]*$//') is closed; this issue's \`offsite\` flag is still up. Clear it and close the issue, or say what is still outstanding. @$(jq -r '.assignees[0].login' <<<"$ISSUE_JSON")"
+          log "#$n: resolved offsite PRs nudged"
+        fi
+      fi
+    fi
   elif has_issue_label blocked; then
     refs="$(blocked_references <<<"$(jq -r '.body // ""' <<<"$ISSUE_JSON")")"
     cross_refs="$(blocked_cross_references <<<"$(jq -r '.body // ""' <<<"$ISSUE_JSON")")"

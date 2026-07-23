@@ -107,7 +107,9 @@ the cross-repo draft link, then clears it at handoff in the same comment that
 reports whether that PR merged or closed. The machine reads the flag and
 never writes it. It stops only the claim-reclaim clock: missing assignees are
 still flagged, queue-label conflicts and missing queue state are still
-repaired, and epic-completion and PR-side stale behavior are unchanged.
+repaired, and epic-completion and PR-side stale behavior are unchanged. The
+sweep tells the assignee once when every visible cross-referenced PR has
+closed; it only tells, and never clears the flag or changes the claim.
 
 ## Scope — which surface? (PRs and issues, any number)
 

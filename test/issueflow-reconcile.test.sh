@@ -76,6 +76,21 @@ check "both quiet flags still produce one exemption verdict" 0 "EXEMPT" \
 check "blocked does not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt <<<"blocked"
 check "ready does not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt <<<"ready"
 check "empty labels do not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt </dev/null
+check "one closed offsite PR nudges" 0 "NUDGE" offsite_resolved_decision <<<"CLOSED"
+check "two closed offsite PRs nudge" 0 "NUDGE" offsite_resolved_decision <<< $'CLOSED\nCLOSED'
+check "one open offsite PR keeps quiet" 0 "QUIET" offsite_resolved_decision <<< $'CLOSED\nOPEN'
+check "no visible offsite PR keeps quiet" 0 "QUIET" offsite_resolved_decision </dev/null
+check "an unreadable offsite PR keeps quiet" 0 "QUIET" offsite_resolved_decision <<< $'CLOSED\nUNKNOWN'
+
+timeline='[
+  {"event":"cross-referenced","source":{"issue":{"number":112,"repository":{"full_name":"heavy-duty/rig"},"pull_request":{"url":"x"}}}},
+  {"event":"cross-referenced","source":{"issue":{"number":7,"repository":{"full_name":"heavy-duty/rig"}}}},
+  {"event":"mentioned","source":{"issue":{"number":9,"repository":{"full_name":"heavy-duty/box"},"pull_request":{"url":"x"}}}},
+  {"event":"assigned"}
+]'
+check "offsite timeline extracts only cross-referenced PRs" 0 "heavy-duty/rig#112" \
+  offsite_cross_referenced_prs <<<"$timeline"
+check "empty offsite timeline extracts nothing" 0 "" offsite_cross_referenced_prs <<<"[]"
 
 # Invariant 3: blocked declarations parse and release only when all close.
 refs="$(blocked_references <<< $'Context #99. Blocked by #12 (first), #7 (second). Blocks #44.')"
@@ -193,6 +208,8 @@ issue_stub_gh() {
       shift
     done
     file="$TMP/$(printf '%s' "$endpoint" | tr '/' '_').json"
+    printf '%s\n' "$endpoint" >>"$TMP/api-calls"
+    [ ! -f "$file.error" ] || return 1
     [ -f "$file" ] || { printf '[]\n'; return 0; }
     if [ -n "$jqexpr" ]; then jq -r "$jqexpr" "$file"; else cat "$file"; fi
   elif [ "$1" = issue ] && [ "$2" = comment ]; then
@@ -274,10 +291,61 @@ check "an offsite claim with an open PR stays claimed" 1 "" \
 offsite_both="$(issue_probe 28 $'claimed\noffsite\nneeds-ruling')"
 check "offsite plus needs-ruling stays claimed" 1 "" \
   grep -q 'reclaimed' <<<"$offsite_both"
+
+# -- resolved offsite work nudges once and only from complete evidence -------
+jq -n --arg at "$(iso_at $((INOW - 3600)))" \
+  '[{"event":"assigned","created_at":$at},
+    {"event":"cross-referenced","source":{"issue":{"number":112,"repository":{"full_name":"heavy-duty/rig"},"pull_request":{"url":"x"}}}}]' \
+  >"$(tfix 29)"
+printf '{"state":"closed"}\n' >"$TMP/repos_heavy-duty_rig_pulls_112.json"
+printf '[]\n' >"$(cfix 29)"
+resolved="$(issue_probe 29 $'claimed\noffsite')"
+check "a closed cross-referenced PR nudges and names the PR" 0 "" \
+  grep -q 'heavy-duty/rig#112 is closed' "$TMP/posted-29"
+check "the resolved nudge leaves the claim untouched" 1 "" \
+  grep -q 'reclaimed' <<<"$resolved"
+issue_probe 29 $'claimed\noffsite' >/dev/null
+check "the resolved nudge is idempotent across sweeps" 0 "1" \
+  grep -cF '<!-- issueflow:offsite-resolved -->' "$TMP/posted-29"
+
+jq -n --arg at "$(iso_at $((INOW - 3600)))" \
+  '[{"event":"assigned","created_at":$at},
+    {"event":"cross-referenced","source":{"issue":{"number":112,"repository":{"full_name":"heavy-duty/rig"},"pull_request":{"url":"x"}}}},
+    {"event":"cross-referenced","source":{"issue":{"number":9,"repository":{"full_name":"heavy-duty/box"},"pull_request":{"url":"x"}}}}]' \
+  >"$(tfix 30)"
+printf '{"state":"open"}\n' >"$TMP/repos_heavy-duty_box_pulls_9.json"
+printf '[]\n' >"$(cfix 30)"
+issue_probe 30 $'claimed\noffsite' >/dev/null
+check "one open cross-referenced PR suppresses the nudge" 1 "" \
+  test -f "$TMP/posted-30"
+
+printf '[]\n' >"$(tfix 31)"
+printf '[]\n' >"$(cfix 31)"
+issue_probe 31 $'claimed\noffsite' >/dev/null
+check "no visible cross-referenced PR stays silent" 1 "" test -f "$TMP/posted-31"
+
+: >"$(tfix 32).error"
+printf '[]\n' >"$(cfix 32)"
+unreadable="$(issue_probe 32 $'claimed\noffsite')"
+check "an unreadable timeline stays silent" 1 "" test -f "$TMP/posted-32"
+check "...and leaves the sweep running without an alarming log" 1 "" \
+  grep -qiE 'error|failed' <<<"$unreadable"
+
+: >"$TMP/api-calls"
+printf '[]\n' >"$(tfix 33)"
+printf '[]\n' >"$(cfix 33)"
+issue_probe 33 claimed >/dev/null
+check "a non-offsite claim performs only the ordinary timeline read" 0 "1" \
+  grep -cF 'repos/owner/repo/issues/33/timeline' "$TMP/api-calls"
+: >"$TMP/api-calls"
+printf '[]\n' >"$(tfix 34)"
+printf '[]\n' >"$(cfix 34)"
+issue_probe 34 $'claimed\noffsite' >/dev/null
+check "an offsite claim performs the one guarded verification read" 0 "2" \
+  grep -cF 'repos/owner/repo/issues/34/timeline' "$TMP/api-calls"
+
 check "a one-hour claim stays claimed for the ordinary age reason" 0 "KEEP" \
   claim_decision 1 false 3600
-check "the offsite exemption flag is named once at its issueflow decision point" 0 "1" \
-  grep -c 'offsite' "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
 check "no reconciler mutation names offsite (#68 D4)" 1 "" \
   grep -E 'gh (issue|pr) edit.*offsite' \
     "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh" \
