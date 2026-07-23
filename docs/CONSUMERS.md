@@ -70,6 +70,8 @@ the machinery at all:
        - uses: heavy-duty/ceremony/actions/changelog-armed@<pinned-tag>
        - uses: heavy-duty/ceremony/actions/changelog-monotonic@<pinned-tag>
        - uses: heavy-duty/ceremony/actions/drill-recorded@<pinned-tag>
+       # Unreleased: runner-isolated is not in 0.1.0. Adopt this step with
+       # the pin bump to the first tag that carries it; never mix refs.
        - uses: heavy-duty/ceremony/actions/runner-isolated@<pinned-tag>
    ```
 
@@ -87,6 +89,13 @@ the machinery at all:
    one file; the unblock is splitting the workflow. A repo with **no**
    self-hosted runner still wants it: the guard's value is the day
    somebody adds one.
+
+   This guide documents `main`. New machinery is marked **unreleased**
+   here until a release tag ships it. If an action does not exist at the
+   consumer's pinned tag, adopt it with the pin bump to the first tag that
+   carries it; never mix a moving or newer ref into an otherwise exact-pin
+   consumer. In particular, `0.1.0` carries the three release guards above
+   plus `docs-sync`, but not `runner-isolated`.
 6. **Labels automation** (optional but recommended): the caller from
    [Labels automation](#labels-automation), plus `.github/labels.conf`
    (panel + the repo's `scope:*` rows) and `.github/labeler.yml` (the
@@ -242,6 +251,7 @@ on:
   workflow_dispatch:                 # bootstraps missing labels on a fresh repo
   pull_request_target:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
+  # Unreleased — not in 0.1.0; add only with the first tag carrying ceremony#32.
   issues:
     types: [opened, labeled, unlabeled, assigned, unassigned, closed]
 permissions:
@@ -252,6 +262,10 @@ jobs:
   labels:
     uses: heavy-duty/ceremony/.github/workflows/labels.yml@<pinned-tag>
 ```
+
+The `issues:` trigger is **unreleased** and is not in `0.1.0`. A consumer
+pinned to `0.1.0` omits it. Add it only when bumping every ceremony reference
+to the first tag carrying ceremony#32; never mix refs to adopt it early.
 
 `pull_request_target` is intentional: fork PRs need the base repository's
 token to write labels. The reusable workflow executes no PR code. It checks
@@ -268,6 +282,12 @@ triage-actors=example-triage-bot
 scope:cli|C5DEF5|The command-line surface
 scope:docs|C5DEF5|Documentation
 ```
+
+The mandatory `triage-actors=` setting is also **unreleased** and is not
+accepted by `0.1.0`. At that tag the file contains `panel=` plus scope rows
+only; adding `triage-actors=` is a parse failure, not an ignored setting. Add
+it at the same pin bump as the `issues:` trigger, to the first tag carrying
+ceremony#32 — never before it and never through mixed refs.
 
 Both actor lists are whitespace-separated. `triage-actors` names the identities
 allowed to mint issues without the sweep applying `needs-triage`. Label rows use exactly
@@ -338,11 +358,10 @@ Bumping the pin re-syncs the mirror in the same PR —
   [releases page](https://github.com/heavy-duty/ceremony/releases) is
   that section, verbatim). One bump PR updates **every** ceremony `uses:`
   reference in the repo to the new tag — the workflow callers *and* each
-  guard step; a release-only setup already has five (the
-  [release caller](#release-workflow) plus the
-  [four CI guards](#bootstrap-a-new-repo)), and changing only one line
-  leaves the consumer split across ceremony versions, which the same-tag
-  rule above forbids. A repo that has adopted the agent team flow
+  guard step. The exact count is tag-dependent: it is the workflow caller
+  or callers plus the guards that the pinned tag carries. Changing only
+  one line leaves the consumer split across ceremony versions, which the
+  same-tag rule above forbids. A repo that has adopted the agent team flow
   additionally bumps the mirror in the same PR —
   [the pin-bump procedure](#the-pin-bump-procedure).
 - **One pin governs machinery and doctrine.** The ref in the consumer's
