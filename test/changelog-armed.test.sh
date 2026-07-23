@@ -53,6 +53,25 @@ tree dev-armed 1.2.4-dev <<'EOF'
 EOF
 check "-dev + Unreleased on top passes" 0 "agrees" in_tree dev-armed
 
+tree dev-seeded 1.2.4-dev <<'EOF'
+# Changelog
+
+## Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+## 1.2.3 — 2026-07-20
+
+### Fixed
+
+- The shipped entry.
+EOF
+check "-dev + seeded empty Unreleased headings passes" 0 "agrees" in_tree dev-seeded
+
 tree dev-stamped 1.2.4-dev <<'EOF'
 # Changelog
 
@@ -89,6 +108,34 @@ tree bare-stamped 1.2.3 <<'EOF'
 - Older entry.
 EOF
 check "bare + own stamped section on top passes" 0 "agrees" in_tree bare-stamped
+
+tree bare-dangling-heading 1.2.3 <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+### Added
+EOF
+check "bare + dangling heading fails with the heading diagnosis" 1 \
+  "section '1.2.3' has no entries — a heading is not an entry" \
+  in_tree bare-dangling-heading
+check "bare + dangling heading keeps the half-ceremony remedy" 1 \
+  "HALF-DONE ceremony" in_tree bare-dangling-heading
+
+tree bare-partly-dangling 1.2.3 <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+### Added
+
+### Fixed
+
+- Fixed entry.
+EOF
+check "bare + one empty grouped heading names the first empty heading" 1 \
+  "section '1.2.3' has an empty heading: '### Added'" \
+  in_tree bare-partly-dangling
 
 tree bare-empty-stamp 1.2.3 <<'EOF'
 # Changelog

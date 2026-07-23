@@ -133,6 +133,14 @@ check "wrapper publishes the requested body" 0 "The seven-oh entry" "$WRAPPER" 0
 check "wrapper refuses an empty section" 1 "no section for '0.5.0'" "$WRAPPER" 0.5.0 "$FIXTURE"
 check "wrapper refuses an absent section" 1 "no section for '9.9.9'" "$WRAPPER" 9.9.9 "$FIXTURE"
 check "wrapper explains how the release PR fixes refusal" 1 "stamps the Unreleased section" "$WRAPPER" 9.9.9 "$FIXTURE"
+check "wrapper refuses a heading-only version section" 1 \
+  "section '1.5.0' has no entries — a heading is not an entry" \
+  "$WRAPPER" 1.5.0 "$PROBLEM_FIXTURE"
+check "wrapper names the first dangling heading" 1 \
+  "section '1.6.0' has an empty heading: '### Added'" \
+  "$WRAPPER" 1.6.0 "$PROBLEM_FIXTURE"
+check "wrapper prints seeded empty Unreleased without refusing" 0 "### Added" \
+  "$WRAPPER" Unreleased "$PROBLEM_FIXTURE"
 check "wrapper requires a version" 2 "usage:" "$WRAPPER"
 check "wrapper refuses a missing file" 1 "no such file" "$WRAPPER" 1.0.0 "$TMP/missing.md"
 

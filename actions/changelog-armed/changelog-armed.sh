@@ -134,7 +134,7 @@ EOF
   # the very extractor the publisher uses — changelog_section (#4) — so the
   # guard and the publisher cannot disagree about what a section is or when
   # one counts as empty (rig#67).
-  if [ -z "$(changelog_section "$changelog" "$ver")" ]; then
+  if ! diagnosis="$(changelog_section_problem "$changelog" "$ver")"; then
     cat >&2 <<EOF
 changelog-armed: the version is '$ver' but $changelog has no non-empty
   section for '$ver'. The top section is:
@@ -150,6 +150,8 @@ changelog-armed: the version is '$ver' but $changelog has no non-empty
 
   The fix is the ceremony's first edit: stamp '## Unreleased' into
   '## $ver — DATE', then put an empty '## Unreleased' back above it.
+
+  $diagnosis
 EOF
     exit 1
   fi

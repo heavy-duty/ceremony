@@ -16,9 +16,10 @@ fi
   exit 1
 }
 
-notes="$(changelog_section "$changelog" "$ver")"
-[ -n "$notes" ] || {
+if ! diagnosis="$(changelog_section_problem "$changelog" "$ver")"; then
   echo "changelog-section: $changelog has no section for '$ver' — the release PR stamps the Unreleased section with version + date BEFORE the tag" >&2
+  printf 'changelog-section: %s\n' "$diagnosis" >&2
   exit 1
-}
+fi
+notes="$(changelog_section "$changelog" "$ver")"
 printf '%s\n' "$notes"
