@@ -6,6 +6,7 @@ so entries say what changed, cite the issue, and stop.
 
 ## Unreleased
 
+- FLEET.md — the assignee's `attention` wake: one role-independent trigger ahead of every per-role list, one acked session per demand; a spec on paper until `duty.sh` polls it (#86).
 - `attention` doctrine — define its assignee-owned pickup, ack, queue and clock semantics across labels, triage, and builder roles (#85).
 - `attention` — add the issue-only, hand-set assignee-demand flag to the core label taxonomy (#84).
 - `issueflow-reconcile` — keep cross-repo references out of local dependency decisions and require triage to resolve cross-repo blockers by hand (#61).
