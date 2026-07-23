@@ -85,7 +85,8 @@ claim_decision() { # $1 assignee count, $2 linked open PR, $3 age seconds
 }
 
 blocked_references() { # body on stdin -> issue numbers, one per line
-  sed -nE 's/^[[:space:]]*Blocked by[[:space:]]+//Ip' \
+  sed -nE 's/.*Blocked by[[:space:]]+//Ip' \
+    | sed -E 's/[.;][[:space:]].*$//' \
     | { grep -Eo '#[0-9]+' || true; } | tr -d '#' | sort -nu
 }
 
@@ -99,7 +100,11 @@ blocked_decision() { # $1 refs, $2 OPEN/CLOSED states
 }
 
 epic_references() { # markdown task-list issue references from body on stdin
-  sed -nE '/^[[:space:]]*[-*][[:space:]]+\[[ xX]\]/p' \
+  awk '
+    tolower($0) ~ /^##[[:space:]]+task list[[:space:]]*$/ { in_list = 1; next }
+    in_list && /^#/ { exit }
+    in_list && /^[[:space:]]*[-*][[:space:]]+\[[ xX]\]/ { print }
+  ' \
     | { grep -Eo '#[0-9]+' || true; } | tr -d '#' | sort -nu
 }
 
