@@ -95,3 +95,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
+      - name: reconcile issue flow
+        if: github.repository != 'heavy-duty/ceremony'
+        uses: ./.ceremony-src/actions/issueflow-reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+      - name: reconcile issue flow (dogfood — the workspace IS ceremony)
+        if: github.repository == 'heavy-duty/ceremony'
+        uses: ./actions/issueflow-reconcile
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}

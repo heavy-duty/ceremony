@@ -229,6 +229,8 @@ on:
   workflow_dispatch:                 # bootstraps missing labels on a fresh repo
   pull_request_target:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
+  issues:
+    types: [opened, labeled, unlabeled, assigned, unassigned, closed]
 permissions:
   contents: read
   issues: write
@@ -242,21 +244,23 @@ jobs:
 token to write labels. The reusable workflow executes no PR code. It checks
 out only the consumer's base branch and the pinned ceremony implementation.
 
-`.github/labels.conf` has one mandatory panel setting followed by zero or
-more scope rows:
+`.github/labels.conf` has one mandatory panel setting, one mandatory
+`triage-actors` setting, and then zero or more scope rows:
 
 ```text
 panel=claude-bot example-codex-bot example-grok-bot
+triage-actors=example-triage-bot
 scope:cli|C5DEF5|The command-line surface
 scope:docs|C5DEF5|Documentation
 ```
 
-The panel is whitespace-separated. Label rows use exactly
+Both actor lists are whitespace-separated. `triage-actors` names the identities
+allowed to mint issues without the sweep applying `needs-triage`. Label rows use exactly
 `name|color|description`; blank lines are ignored and extra pipes are refused.
 There are no comment lines: every non-blank line must be the `panel=`
-setting or a label row, so `#`-prefixed prose is a parse failure, not a
-comment (rig #13's conversion found this the hard way — keep the file data
-only).
+setting, the `triage-actors=` setting, or a label row, so `#`-prefixed prose
+is a parse failure, not a comment (rig #13's conversion found this the hard
+way — keep the file data only).
 Core state, blocker, work-queue, and release labels come from ceremony. Scope
 rows remain consumer-owned because paths and surfaces differ by repository.
 

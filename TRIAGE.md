@@ -82,13 +82,16 @@ dependency-ordered task list of child issues. Children reference the epic;
 the epic's checklist is the progress view. Builders never pick the epic
 itself. Keep the checklist current — a stale epic misleads every scan.
 
-## Backlog hygiene (yours until #18 automates it)
+## Backlog hygiene
 
 - **Dedup before minting** — search issues *and* closed issues; extend or
   reopen before duplicating.
-- **Flip `blocked` → `ready`** when the named dependency lands.
-- **Reclaim abandoned claims**: `claimed` + no open PR + no activity →
-  comment, unassign, restore `ready`.
+- The issue-flow sweep flips `blocked` → `ready` when every named dependency
+  lands, and flags a blocked issue whose dependency declaration is unreadable.
+- The sweep reclaims abandoned claims after 48 hours: `claimed` + no open PR
+  + no activity → comment, unassign, restore `ready`.
+- Automation never guesses intent. Resolve the conflict comments it leaves on
+  malformed queue states, and close or extend completed epics when nudged.
 - **Close obsolete issues** with the reason and a link to what obsoleted
   them. Every label on every open issue stays true; the board is only worth
   scanning if it does not lie.
