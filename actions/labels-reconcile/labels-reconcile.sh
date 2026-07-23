@@ -50,6 +50,10 @@ LABELS=""
 RETIRED=(state:needs-rebase)
 STALE_AFTER=$((48 * 3600))
 
+# The needs-ruling invariants (#52) — one implementation for both surfaces.
+# shellcheck source=lib/ruling.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../lib/ruling.sh"
+
 log() { printf 'labels: %s\n' "$*"; }
 
 run() { # every mutation goes through here — DRY_RUN=1 logs instead of doing
@@ -412,7 +416,7 @@ $(configured_label_rows "$LABELS_CONF")"
 has_label() { grep -qxF "$1" <<<"$LABELS"; }
 
 reconcile_pr() { # $1 = PR number; relies on the globals set from its fetch
-  local n="$1" desired remove s args last_activity age
+  local n="$1" desired remove s args last_activity last_activity_epoch age
 
   desired="$(decide_state)"
 
@@ -517,7 +521,8 @@ reconcile_pr() { # $1 = PR number; relies on the globals set from its fetch
       gh api --paginate "repos/$REPO/pulls/$n/commits" --jq '.[].commit.committer.date'
     } | sort | tail -n1
   )"
-  age=$((NOW - $(date -d "$last_activity" +%s)))
+  last_activity_epoch="$(date -d "$last_activity" +%s)"
+  age=$((NOW - last_activity_epoch))
   # needs-ruling joins blocked here: waiting on a human is legitimately quiet
   # (#50 D10). The 7-day nudge is #52's, once for both surfaces.
   if has_label blocked || has_label needs-ruling || [ "$age" -le "$STALE_AFTER" ]; then
@@ -528,6 +533,15 @@ reconcile_pr() { # $1 = PR number; relies on the globals set from its fetch
   elif ! has_label stale; then
     run gh issue edit "$n" -R "$REPO" --add-label stale >/dev/null
     log "#$n: stale ($((age / 3600))h quiet)"
+  fi
+
+  # ---- the ruling invariants (#52): the bare-flag check + the 7-day nudge --
+  # The stale EXEMPTION above is #51's; these are the sweep halves that ride
+  # the same real-activity computation (lib/ruling.sh, shared with the issue
+  # side). Behind the flag check so flag-free PRs — all of them, almost
+  # always — cost no extra API reads.
+  if has_label needs-ruling; then
+    reconcile_ruling "$n" "$last_activity_epoch" "$NOW"
   fi
 }
 

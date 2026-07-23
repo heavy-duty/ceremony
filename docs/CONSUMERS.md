@@ -226,9 +226,12 @@ build (#15) and incubator's GHCR image push (#16).
 ## Labels automation
 
 The reusable labels workflow owns two independent jobs: additive path-based
-`scope:*` labels and reconciliation of PR state, blockers, handoff, and stale
-status. The consumer keeps its path mapping in `.github/labeler.yml` and its
-review panel plus scope taxonomy in `.github/labels.conf`.
+`scope:*` labels and reconciliation of PR state, blockers, handoff, stale
+status, and the `needs-ruling` invariants on both surfaces — the bare-flag
+check and the 7-day comment-only nudge (#52; the sweep reads that flag and
+never writes it). The consumer keeps its path mapping in
+`.github/labeler.yml` and its review panel plus scope taxonomy in
+`.github/labels.conf`.
 
 The complete caller is:
 
@@ -253,6 +256,8 @@ jobs:
 `pull_request_target` is intentional: fork PRs need the base repository's
 token to write labels. The reusable workflow executes no PR code. It checks
 out only the consumer's base branch and the pinned ceremony implementation.
+The #52 ruling invariants ride exactly these triggers — the caller above is
+unchanged since #18, so adopting them is a pin bump, not a stub edit.
 
 `.github/labels.conf` has one mandatory panel setting, one mandatory
 `triage-actors` setting, and then zero or more scope rows:
