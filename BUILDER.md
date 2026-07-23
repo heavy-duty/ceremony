@@ -76,14 +76,64 @@ CONTRIBUTING; everything below is the shared flow.)
    reviewer doubts behavior, add the test that settles it.
 3. Never dismiss a review, never merge, never mark your own work as passed.
    A blocking point you disagree with is answered with evidence or escalated
-   in the PR — a maintainer can be asked for a ruling; silence and
-   force-forward are not options. The ruling ask has mechanics: set
-   `needs-ruling` on the PR, with one comment carrying the question, the
-   options, and your recommendation — a panel deadlock is consolidated into
-   that one question, never forwarded as three phrasings of it. The label
-   stays until agreement is *reached*, not until the maintainer replies;
-   you record the ruling, remove the label, and return the PR to its flow
-   ([LABELS.md](LABELS.md)).
+   in the PR — silence and force-forward are not options. A panel deadlock
+   is one kind of human-owned decision; use the ruling ask below
+   ([#50 D11](https://github.com/heavy-duty/ceremony/issues/50)).
+
+## The ruling ask
+
+Set `needs-ruling` whenever a decision belongs to a human: org policy,
+published artifacts, secrets, prod, or any choice whose cost lands outside
+the PR. A panel deadlock is one instance, not the definition. The builder is
+the accountable flag-setter on a PR and consolidates the decision into one
+comment rather than forwarding several reviewers' phrasings
+([#50 D11](https://github.com/heavy-duty/ceremony/issues/50)).
+
+Keep at most these five lines above the fold and put all other analysis
+inside the fold. The field labels are fixed because the ruling machinery
+checks for them ([#50 D12](https://github.com/heavy-duty/ceremony/issues/50)):
+
+```text
+🧭 needs-ruling — <the decision, one line>
+Options:  A — <one clause>   B — <one clause>
+Recommend: A, because <one clause>.
+Blocked:  <what stops; what continues meanwhile>
+Default:  <A at 2026-07-23T21:00Z if no ruling> | none — hard block
+<details><summary>Analysis</summary>…everything else…</details>
+```
+
+The options must be exhaustive and mutually exclusive; more than three means
+the question is not ready. `Recommend:` is mandatory — omitting it hands the
+whole problem to the human. `Blocked:` names both what stops and what
+continues. Write a timed `Default:` only when you are affirmatively confident
+the decision is reversible inside the PR before merge. Unsure is not a tie:
+it is a hard block. Published artifacts, secrets, prod, and org policy are
+hard blocks by construction ([#50 D12–D13](https://github.com/heavy-duty/ceremony/issues/50)).
+
+The ladder is anchored to the current episode's `needs-ruling` **`labeled`
+event**, not its `Default:` deadline or the last activity
+([#50 D13–D14](https://github.com/heavy-duty/ceremony/issues/50)):
+
+- **0–12h:** proceed when a still-clear, reversible default expires, and say
+  out loud that you did. A hard block waits.
+- **at 12h:** do not fire a stale default. Re-read it against what has landed
+  and ask whether it still holds and whether reasonable doubt remains. If
+  doubt has appeared, make it a hard block.
+- **at 24h:** proceed regardless, **as a PR**. Pick an option and state in the
+  PR body which way you went and what doubt remains. Nothing merges by this;
+  the human still gates the merge.
+- **past 24h:** hand the choice to triage. Triage picks the option, records it
+  as a decision, and remains accountable; the operator can overturn it at
+  merge.
+
+A re-flag starts a fresh ladder. The ladder applies whatever `Default:` says,
+including a hard block, and an active back-and-forth still climbs it. This is
+different from the 7-day nudge, which resets on real activity. The machine
+observes both clocks but never sets, clears, or decides `needs-ruling`.
+
+The label stays until agreement is *reached*, not until the maintainer
+replies. The setter records the ruling, removes the label, and returns the
+item to its flow in the same comment ([LABELS.md](LABELS.md)).
 
 ## Handoff
 

@@ -81,13 +81,16 @@ saw Y" outranks one that says "this looks like it might".
 - Convergence = every panel verdict approves the current head, no
   `blocker:*` standing. Then the builder hands off (`state:needs-human`) and
   the panel's job is done.
-- If a round exposes a disagreement **within the panel**, argue it in the PR
-  with evidence until one side concedes or the builder escalates to the
-  maintainer for a ruling. Two reviewers pulling a builder in opposite
-  directions without resolution is a panel failure, not a builder failure.
-  The escalation is flagged `needs-ruling` — by the **builder**, never by
-  you: one accountable flag-setter per PR is what keeps the escalation
-  contract enforceable and hands the human one consolidated question
-  instead of three phrasings of it. Your job is to state the disagreement
-  precisely enough that the builder can write that escalation
-  ([LABELS.md](LABELS.md)).
+- Flag an unowned decision when it belongs to a human: org policy, published
+  artifacts, secrets, prod, or any choice whose cost lands outside the PR. A
+  disagreement within the panel is one instance, not the definition
+  ([#50 D11](https://github.com/heavy-duty/ceremony/issues/50)). Argue a
+  panel disagreement in the PR with evidence until one side concedes or the
+  builder escalates; two reviewers pulling a builder in opposite directions
+  without resolution is a panel failure, not a builder failure.
+  `needs-ruling` is set by the **builder**, never by you: one accountable
+  flag-setter per PR hands the human one consolidated question. State the
+  unowned decision precisely enough for the builder to write
+  [the canonical ruling ask](BUILDER.md#the-ruling-ask), including what
+  stops and what continues ([#50 D12](https://github.com/heavy-duty/ceremony/issues/50);
+  [LABELS.md](LABELS.md)).
