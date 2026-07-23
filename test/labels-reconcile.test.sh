@@ -614,6 +614,7 @@ expect "the retired registry is exactly the six, no seventh" \
   "$RETIRED_WANT" "$(retired_label_names)"
 # the sentence and the registry must not drift apart again: parse the names
 # out of LABELS.md's own parenthetical and demand identity, name for name
+# shellcheck disable=SC2016 # the backticks are LABELS.md literals, not expansions
 doctrine="$(sed -n '/Default GitHub labels/,/are deleted at/p' LABELS.md \
   | tr '\n' ' ' | sed 's/.*(//;s/).*//' | grep -o '`[^`]*`' | tr -d '`')"
 expect "...and matches LABELS.md name for name" "$doctrine" "$(retired_label_names)"
@@ -635,11 +636,11 @@ expect "...and the recorded upsert set is unchanged from today's" \
 
 # -- a missing label is success: gh exits non-zero with not-found, and the
 #    guard keeps that from aborting the dispatch. Red without the guard.
-missing_rc=0
-missing_out="$(
+boot_missing_probe() {
   (
     REPO=owner/repo LABELS_CONF=.github/labels.conf
     run() { "$@"; }
+    # shellcheck disable=SC2317 # reached through run's "$@", opaque to shellcheck
     gh() {
       if [ "$1" = label ] && [ "$2" = delete ]; then
         printf '%s\n' "$3" >>"$BOOT/missing-deletes"
@@ -649,7 +650,9 @@ missing_out="$(
     }
     bootstrap_labels
   ) 2>&1
-)" || missing_rc=$?
+}
+missing_rc=0
+missing_out="$(boot_missing_probe)" || missing_rc=$?
 expect "an already-absent label does not abort the dispatch" 0 "$missing_rc"
 expect "...every deletion still ran" "$RETIRED_WANT" "$(cat "$BOOT/missing-deletes")"
 expect "...and each absence is logged at most once per name" \
@@ -657,11 +660,11 @@ expect "...and each absence is logged at most once per name" \
 
 # -- a refusal is tolerated: the blocker:drill-pending 403 shape, on a delete.
 #    The other five still go, the taxonomy still lands, the log says who.
-refusal_rc=0
-refusal_out="$(
+boot_refusal_probe() {
   (
     REPO=owner/repo LABELS_CONF=.github/labels.conf
     run() { "$@"; }
+    # shellcheck disable=SC2317 # reached through run's "$@", opaque to shellcheck
     gh() {
       if [ "$1" = label ] && [ "$2" = delete ]; then
         if [ "$3" = question ]; then
@@ -675,7 +678,9 @@ refusal_out="$(
     }
     bootstrap_labels
   ) 2>&1
-)" || refusal_rc=$?
+}
+refusal_rc=0
+refusal_out="$(boot_refusal_probe)" || refusal_rc=$?
 expect "a refused delete does not abort the dispatch" 0 "$refusal_rc"
 expect "...the other five still deleted" "duplicate
 invalid
@@ -688,13 +693,15 @@ expect "...and the log names the refused label" \
   yes "$(grep -q "retire: 'question'" <<<"$refusal_out" && echo yes || echo no)"
 
 # -- DRY_RUN narrates the deletions like every other mutation, and does none
-dry_out="$(
+boot_dry_probe() {
   (
     REPO=owner/repo LABELS_CONF=.github/labels.conf DRY_RUN=1
+    # shellcheck disable=SC2317 # reached through run's "$@", opaque to shellcheck
     gh() { printf '%s\n' "$*" >>"$BOOT/dry-real"; }
     bootstrap_labels
   )
-)"
+}
+dry_out="$(boot_dry_probe)"
 expect "DRY_RUN narrates each deletion" \
   6 "$(grep -c '^labels: DRY_RUN: gh label delete' <<<"$dry_out")"
 expect "...and performs none" \
