@@ -89,6 +89,8 @@ author_decision() { # $1 = true when author is triage; labels on stdin
 
 claim_decision() { # $1 assignee count, $2 linked open PR, $3 age seconds
   local assignees="$1" open_pr="$2" age="$3"
+  # Staleness wins over missing ownership: a stale unassigned claim is
+  # derivably reclaimable, while a recent unassigned claim needs triage.
   if [ "$open_pr" = false ] && [ "$age" -gt "$STALE_AFTER" ]; then echo RECLAIM
   elif [ "$assignees" -eq 0 ]; then echo FLAG_UNASSIGNED
   else echo KEEP
@@ -99,9 +101,34 @@ claim_decision_at() { # $1 assignee count, $2 linked open PR, $3 last activity e
   claim_decision "$1" "$2" "$((NOW - $3))"
 }
 
+claim_reclaim_marker() { # $1 = last activity epoch
+  printf 'claim-reclaimed-%s\n' "$1"
+}
+
 blocked_references() { # body on stdin -> issue numbers, one per line
-  sed -nE 's/.*Blocked by[[:space:]]+//Ip' \
-    | sed -E 's/[.;][[:space:]].*$//' \
+  # Dependency declarations sometimes soft-wrap after a comma. Continue
+  # through the first sentence terminator; if prose omits one, conservatively
+  # retain later references so ambiguity can keep an issue blocked, never
+  # promote it prematurely.
+  awk '
+    {
+      line = $0
+      lower = tolower(line)
+      if (!active) {
+        marker = "blocked by"
+        start = index(lower, marker)
+        if (!start) next
+        line = substr(line, start + length(marker))
+        active = 1
+      }
+      if (line ~ /[.;]/) {
+        sub(/[.;].*/, "", line)
+        print line
+        exit
+      }
+      print line
+    }
+  ' \
     | { grep -Eo '#[0-9]+' || true; } | tr -d '#' | sort -nu
 }
 
@@ -186,7 +213,10 @@ reconcile_issue() {
         ensure_comment "$n" claimed-unassigned \
           'This issue is `claimed` but has no assignee. The sweep cannot infer an owner; triage must repair the claim.' ;;
       RECLAIM)
-        ensure_comment "$n" claim-reclaimed \
+        # The last-activity epoch identifies a claim episode. A fixed marker
+        # hid the required comment when the same issue was later claimed and
+        # reclaimed again.
+        ensure_comment "$n" "$(claim_reclaim_marker "$age")" \
           'This claim has no linked open PR and no activity for 48 hours. The sweep is reclaiming it for the ready queue.'
         owners="$(jq -r '[.assignees[].login] | join(",")' <<<"$ISSUE_JSON")"
         if [ -n "$owners" ]; then

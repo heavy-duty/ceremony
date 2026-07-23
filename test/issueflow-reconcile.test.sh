@@ -31,8 +31,10 @@ check "dogfood caller wakes on issue events" 0 "  issues:" \
 dogfood_pr_step="$(sed -n \
   '/name: reconcile state + stale (dogfood/,/name: reconcile issue flow/p' \
   "$ROOT/.github/workflows/labels.yml")"
+# shellcheck disable=SC2016 # GitHub expressions are asserted as literals
 check "dogfood PR reconcile receives repository" 0 '          REPO: ${{ github.repository }}' \
   grep -F '          REPO: ${{ github.repository }}' <<<"$dogfood_pr_step"
+# shellcheck disable=SC2016 # GitHub expressions are asserted as literals
 check "dogfood PR reconcile receives token" 0 '          GH_TOKEN: ${{ github.token }}' \
   grep -F '          GH_TOKEN: ${{ github.token }}' <<<"$dogfood_pr_step"
 
@@ -58,10 +60,24 @@ check "injected clock: exact stale boundary stays claimed" 0 "KEEP" \
 check "injected clock: past stale boundary is reclaimed" 0 "RECLAIM" \
   bash -c 'ISSUEFLOW_NOW=100000 ISSUEFLOW_STALE_HOURS=1 source "$1"; claim_decision_at 1 false 96399' _ \
   "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
+# shellcheck disable=SC2016 # expansion belongs to the isolated bash -c process
+check "invalid injected clock fails loudly" 1 "ISSUEFLOW_NOW must be UTC epoch seconds" \
+  bash -c 'ISSUEFLOW_NOW=garbage source "$1"' _ \
+  "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
+check "reclaim marker is stable within a claim episode" 0 "claim-reclaimed-96399" \
+  claim_reclaim_marker 96399
+check "a later claim episode receives a new reclaim marker" 0 "claim-reclaimed-99999" \
+  claim_reclaim_marker 99999
 
 # Invariant 3: blocked declarations parse and release only when all close.
 refs="$(blocked_references <<< $'Context #99. Blocked by #12 (first), #7 (second). Blocks #44.')"
 check "blocked declaration extracts only declared refs" 0 $'7\n12' printf '%s\n' "$refs"
+body=$'Blocked by #12 (first),\n#7 (soft-wrapped second). Blocks #44.'
+check "soft-wrapped blocker declaration retains continuation refs" 0 "" test \
+  "$(blocked_references <<<"$body")" = $'7\n12'
+body=$'Blocked by #12 (known)\nFollow-up context mentions #7 without a sentence boundary'
+check "unterminated blocker prose errs toward retaining dependencies" 0 "" test \
+  "$(blocked_references <<<"$body")" = $'7\n12'
 body="Part of #1. Blocked by #11 (needs a ceremony tag to pin), #12 (must be executed from the guide), #19 (the conversion vendors the doctrine). Blocks #14, #15 (they inherit the pilot's lessons)."
 check "real issue 13 inline blockers parse" 0 "" test \
   "$(blocked_references <<<"$body")" = $'11\n12\n19'
