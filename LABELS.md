@@ -67,12 +67,15 @@ comments, unassigns the stale owner, and restores `ready`.
 | `stale` | `#B60205` | no activity for 48h — sweep-managed, never hand-applied |
 | `blocked` | `#6A737D` | (see above — same label serves PRs waiting on another PR/issue; legitimately quiet, the staleness sweep skips it) |
 | `offsite` | `#CFD3D7` | issue deliverable is a PR in another repository; set by the builder with the draft link and cleared by the builder at handoff |
-| `needs-ruling` | `#D4C5F9` | a human decision is required; the question, options and a recommendation are in the flagging comment. Set by triage or the builder; a state, not a signal — it clears on agreement, not on a reply |
+| `needs-ruling` | `#D4C5F9` | a human-owned decision is required; use BUILDER.md's ruling template and ladder. Set by triage or the builder; a state, not a signal — it clears on agreement, not on a reply |
 | `release` | `#0E8A16` | release flow, versioning, packaging work — and the ceremony PR itself |
 | `merge-next` | `#0E8A16` | head of the merge queue — merge this one next. Queue order is *intent*: never set by the reconciler, only cleared by it |
 
 `needs-ruling` marks where the human's turn is when the pending thing is a
-*decision*, not a merge (#50 settled it, D1–D10). It is not
+*decision*, not a merge ([#50 D1–D14](https://github.com/heavy-duty/ceremony/issues/50)).
+It applies to any human-owned decision — org policy, published artifacts,
+secrets, prod, or any choice whose cost lands outside the work. A panel
+deadlock is one instance, not the definition (D11). It is not
 `state:needs-human`: that label means exactly "this PR could be merged right
 now", and the retired `state:needs-rebase` is the family's proof that a
 label meaning two things lies about both. It is not a `blocker:*` either:
@@ -81,24 +84,49 @@ and the flag must live on issues too, where blockers do not exist. On issues
 it coexists with the queue labels (the one-of-three invariant above ignores
 it); its color is the light shade of `state:needs-human`'s, so the human
 axis reads as one family. It is a state, not a signal: set only with the
-escalation contract (the question, the options, a recommendation — a bare
-flag is noise), it stays up until agreement is *reached* — a human reply
-alone does not clear it — and its setter closes it out: records the ruling
-as a decision in one comment, removes the label, and returns the item to
-its flow in that same comment, never as a side effect. If the human
-disagrees that agreement was reached, the label goes back on. The machine
-reads it and never writes it: the reconciler refuses `state:needs-human`
+[canonical escalation contract](BUILDER.md#the-ruling-ask) (D12). A bare
+flag is noise. The comment carries exhaustive, mutually exclusive options
+(at most three), a mandatory recommendation, what stops and what continues,
+and either a default affirmatively known to be reversible inside the PR or
+`none — hard block`. Unsure is a block; published artifacts, secrets, prod,
+and org policy are hard blocks by construction (D13).
+
+The ruling ladder runs from the current episode's `needs-ruling` **`labeled`
+event** (D13–D14):
+
+- **0–12h:** a clear, reversible decision may proceed when its stated default
+  expires, saying out loud that it did; anything with reasonable doubt waits
+  as a hard block.
+- **at 12h:** the setter re-reads the default against what has landed and asks
+  whether it still holds and whether doubt remains. A stale default does not
+  fire; new doubt makes it a hard block.
+- **at 24h:** the builder proceeds regardless, **as a PR**, stating the option
+  chosen and the doubt that remains. Nothing merges by this; the human still
+  gates the merge.
+- **past 24h:** triage picks the option, records it as a decision, and remains
+  accountable. The operator may overturn it at merge.
+
+A re-flag starts a new ladder. The rungs apply whatever `Default:` says,
+including a hard block. Active discussion still climbs the ladder; by
+contrast, the separate 7-day nudge resets on real activity. The machine
+observes the rungs but never sets, clears, or decides `needs-ruling`.
+
+The flag stays up until agreement is *reached* — a human reply alone does not
+clear it — and its setter closes it out: records the ruling as a decision in
+one comment, removes the label, and returns the item to its flow in that same
+comment, never as a side effect. If the human disagrees that agreement was
+reached, the label goes back on. The reconciler refuses `state:needs-human`
 while it stands (the PR falls to `state:addressing` — the ball on the PR is
-the builder's, who carries the ruling in), and the staleness sweep skips
-it, because waiting on a human is legitimately quiet. Quiet, but not
-unwatched (#52, both surfaces): a flag set with no escalation comment from
-its setter is called out by the sweep — comment-only, scoped to the labeled
-event, the label never removed — and a ruling with no real activity for 7
-days draws a comment-only nudge addressed to the decider, linking the
-escalation. The nudge carries no marker on purpose: the comment is itself
-activity, so it resets its own window and never repeats within a quiet
-week. Label churn is not activity — the clock reads comments, reviews and
-commits, or the sweep would reset itself.
+the builder's, who carries the ruling in), and the staleness sweep skips it,
+because waiting on a human is legitimately quiet. Quiet, but not unwatched
+(#52, both surfaces): a flag set with no escalation comment from its setter
+is called out by the sweep — comment-only, scoped to the labeled event, the
+label never removed — and a ruling with no real activity for 7 days draws a
+comment-only nudge addressed to the decider, linking the escalation. The
+nudge carries no marker on purpose: the comment is itself activity, so it
+resets its own window and never repeats within a quiet week. Label churn is
+not activity — the clock reads comments, reviews and commits, or the sweep
+would reset itself.
 
 `offsite` is issue-only and records that a claimed issue's deliverable lives
 in another repository, where a closing reference cannot make a local open PR
