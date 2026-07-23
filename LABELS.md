@@ -89,7 +89,15 @@ disagrees that agreement was reached, the label goes back on. The machine
 reads it and never writes it: the reconciler refuses `state:needs-human`
 while it stands (the PR falls to `state:addressing` — the ball on the PR is
 the builder's, who carries the ruling in), and the staleness sweep skips
-it, because waiting on a human is legitimately quiet.
+it, because waiting on a human is legitimately quiet. Quiet, but not
+unwatched (#52, both surfaces): a flag set with no escalation comment from
+its setter is called out by the sweep — comment-only, scoped to the labeled
+event, the label never removed — and a ruling with no real activity for 7
+days draws a comment-only nudge addressed to the decider, linking the
+escalation. The nudge carries no marker on purpose: the comment is itself
+activity, so it resets its own window and never repeats within a quiet
+week. Label churn is not activity — the clock reads comments, reviews and
+commits, or the sweep would reset itself.
 
 ## Scope — which surface? (PRs and issues, any number)
 
