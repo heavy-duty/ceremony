@@ -60,6 +60,12 @@ run() { # every mutation goes through here — DRY_RUN=1 logs instead of doing
   if [ -n "${DRY_RUN:-}" ]; then log "DRY_RUN: $*"; else "$@"; fi
 }
 
+blind_sweep_warning() { # $1 = unreadable PRs, $2 = all open PRs
+  if [ "$2" -gt 0 ] && [ "$1" -eq "$2" ]; then
+    echo "::warning::labels: every open PR was unreadable; grant checks: read and statuses: read in the caller (private repos do not imply them)"
+  fi
+}
+
 load_config() { # $1 = consumer labels.conf; panel is mandatory, scopes optional
   local conf="$1" line panel_seen=false
   [ -f "$conf" ] || {
@@ -592,9 +598,13 @@ main() {
   REPO_LABELS="$(gh label list -R "$REPO" --limit 200 --json name --jq '.[].name' 2>/dev/null || echo "")"
   [ -z "$REPO_LABELS" ] && log "WARNING: could not read the label set — applying labels unfiltered"
 
-  local n
-  for n in $(gh pr list -R "$REPO" --state open --limit 100 --json number --jq '.[].number'); do
-    (
+  local n output status total=0 unreadable=0
+  while IFS= read -r n; do
+    [ -n "$n" ] || continue
+    total=$((total + 1))
+    status=0
+    output="$(
+      (
       PR_JSON="$(gh api "repos/$REPO/pulls/$n")"
       DRAFT="$(jq -r '.draft' <<<"$PR_JSON")"
       AUTHOR="$(jq -r '.user.login' <<<"$PR_JSON")"
@@ -623,8 +633,16 @@ main() {
         exit 0
       fi
       reconcile_pr "$n"
-    ) || log "#$n: reconcile failed — continuing with the remaining PRs"
-  done
+      ) 2>&1
+    )" || status=$?
+    [ -n "$output" ] && printf '%s\n' "$output"
+    if grep -qxF "labels: #$n: could not read mergeability/checks — left alone this pass" <<<"$output"; then
+      unreadable=$((unreadable + 1))
+    elif [ "$status" -ne 0 ]; then
+      log "#$n: reconcile failed — continuing with the remaining PRs"
+    fi
+  done < <(gh pr list -R "$REPO" --state open --limit 100 --json number --jq '.[].number')
+  blind_sweep_warning "$unreadable" "$total"
   log "reconciled."
 }
 

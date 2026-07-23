@@ -38,6 +38,18 @@ rev() { # $1=login $2=state $3=commit $4=body $5=submitted_at → one review obj
 
 reviews() { jq -s '.' <<<"$*"; } # collect review objects into an array
 
+# -- a sweep-wide read failure is visible without changing any PR ------------
+warning="$(blind_sweep_warning 3 3)"
+expect "a wholly blind sweep warns" \
+  "::warning::labels: every open PR was unreadable; grant checks: read and statuses: read in the caller (private repos do not imply them)" \
+  "$warning"
+expect "the blind warning names checks: read" named \
+  "$(grep -qF "checks: read" <<<"$warning" && echo named || echo missing)"
+expect "the blind warning names statuses: read" named \
+  "$(grep -qF "statuses: read" <<<"$warning" && echo named || echo missing)"
+expect "a partially blind sweep does not warn" "" "$(blind_sweep_warning 1 3)"
+expect "a sweep with no open PRs does not warn" "" "$(blind_sweep_warning 0 0)"
+
 # -- drafts are building, whoever is requested --------------------------------
 DRAFT=true HEAD_SHA=head1 REQUESTED="" REVIEWS_JSON='[]'
 expect "draft PR is building" state:building "$(decide_state)"
@@ -592,6 +604,40 @@ expect "exactly one nudge across both sweeps" \
 expect "no label edit across both sweeps names the ruling flag" \
   no "$(grep -q 'needs-ruling' "$RTMP/edits" 2>/dev/null && echo yes || echo no)"
 
+# -- the sweep wiring observes the existing per-PR skip without writing -------
+blind_main_probe() {
+  (
+    GITHUB_EVENT_NAME=schedule
+    REPO=owner/repo
+    LABELS_CONF=.github/labels.conf
+    gh() {
+      if [ "$1" = label ] && [ "$2" = list ]; then
+        printf 'state:building\nstate:addressing\n'
+      elif [ "$1" = pr ] && [ "$2" = list ]; then
+        printf '101\n102\n'
+      elif [ "$1" = pr ] && [ "$2" = view ]; then
+        printf '{}\n'
+      elif [ "$1" = api ] && [[ "$*" = *"/reviews"* ]]; then
+        return 0
+      elif [ "$1" = api ]; then
+        jq -n --arg n "${*: -1}" \
+          '{draft:false,user:{login:"author"},head:{sha:"head"},labels:[],requested_reviewers:[],created_at:"2026-07-23T00:00:00Z"}'
+      elif [ "$1" = issue ] && [ "$2" = edit ]; then
+        printf 'MUTATION: %s\n' "$*"
+      fi
+    }
+    main
+  )
+}
+
+blind_main="$(blind_main_probe)"
+expect "a wholly blind main sweep emits one actionable annotation" 1 \
+  "$(grep -c '^::warning::.*checks: read.*statuses: read' <<<"$blind_main")"
+expect "a wholly blind main sweep leaves every PR untouched" no \
+  "$(grep -q '^MUTATION:' <<<"$blind_main" && echo yes || echo no)"
+expect "the existing per-PR skip still runs for every blind PR" 2 \
+  "$(grep -c 'could not read mergeability/checks — left alone this pass' <<<"$blind_main")"
+
 # ---------------------------------------------------------------------------
 # bootstrap_labels retires the GitHub defaults (#93). LABELS.md published
 # them as deleted at bootstrap; nothing deleted them — incubator's first
@@ -754,6 +800,5 @@ for ev in schedule pull_request_target; do
   expect "...and deletes nothing" \
     no "$(grep -q '^delete ' "$EXEC/record" && echo yes || echo no)"
 done
-
 printf 'labels-reconcile tests: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

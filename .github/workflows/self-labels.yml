@@ -13,6 +13,8 @@ on:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
 permissions:
   contents: read
+  checks: read          # mergeability/check-rollup read for PR state
+  statuses: read        # commit-status rollup read for PR state
   issues: write
   pull-requests: write
 jobs:
