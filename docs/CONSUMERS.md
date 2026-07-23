@@ -49,7 +49,18 @@ the machinery at all:
    keeps the repo clear of it entirely. (`package-json` backend: the
    `version` field, same rule.)
 2. **An armed `CHANGELOG.md`**: a preamble plus an empty `## Unreleased`
-   section for the first entries to land under.
+   section for the first entries to land under. If the repo groups entries,
+   seed the shape the ceremony PR will restore at every re-arm:
+
+   ```markdown
+   ## Unreleased
+
+   ### Added
+
+   ### Changed
+
+   ### Fixed
+   ```
 3. **`drills/README.md`** defining what a drill *means* in this repo —
    each repo names its own
    ([the drill doctrine](../README.md#the-drill-doctrine)). Plain
@@ -382,6 +393,11 @@ The portable version of the family's contributor rule — the repo's own
 CONTRIBUTING may sharpen it, but this is the floor the guards assume:
 
 - **Every PR that changes behavior adds one line** under `## Unreleased`.
+- **Grouped changelogs keep three standing headings:** `### Added`,
+  `### Changed`, and `### Fixed`. The ceremony PR's hand-edited re-arm seeds
+  all three; append under one instead of creating a heading at the top
+  anchor. Create `Deprecated`, `Removed`, or `Security` only when a change
+  genuinely needs that rarer kind.
 - **Insert above the heading below — never type over it.** Replacing a
   shipped `## X.Y.Z` heading with your entry deletes that release's
   section, silently; this exact edit is why the
@@ -393,7 +409,8 @@ CONTRIBUTING may sharpen it, but this is the floor the guards assume:
   belong in the PR body, where anyone chasing the reasoning already goes.
 - **Cite the issue or PR** — `(#141)`.
 - **Mark a breaking change** with a leading `BREAKING:`.
-- Group under `### Added` / `### Changed` / `### Fixed` / `### Removed`.
+- Flat changelogs remain flat; the standing-heading rule applies only when a
+  repo already groups its entries.
 
 ## Adopting the agent team flow
 

@@ -6,6 +6,7 @@ so entries say what changed, cite the issue, and stop.
 
 ## Unreleased
 
+- Changelog publication — count entries instead of bytes, refuse dangling grouped headings, and seed grouped re-arms with Added/Changed/Fixed (#98).
 - `labels-reconcile` — grant callers private-repo check reads and warn when an entire PR sweep is blind (#95).
 - `labels-reconcile` — the bootstrap now retires the six GitHub defaults `LABELS.md` publishes as deleted, tolerating both an already-absent label and a refused delete (#93).
 - `issueflow-reconcile` — a triage-authored issue arrival stands down with exit 0 instead of killing the run before the sweep (#91).
