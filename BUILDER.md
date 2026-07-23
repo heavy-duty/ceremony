@@ -11,8 +11,30 @@ triage bug, and the move is to say so on the issue, not to guess.
 - Respect dependency order: inside an epic, take the earliest unblocked
   unclaimed child. Between epics and strays, prefer the issue that unblocks
   the most other work.
-- **One issue at a time.** Finish or release your claim before taking
-  another.
+- **One build at a time.** You hold at most one issue on which you are
+  writing or revising a deliverable — finish or release that work before
+  starting new work. The rule counts build work in flight, not claims: a
+  claim does not consume the slot while it is **parked**, meaning the next
+  move belongs to someone else. Exactly three shapes qualify:
+  1. the issue carries `needs-ruling`, its escalation names a decider, and
+     its `Blocked:` line stops the remaining work;
+  2. the deliverable is in a review round where every outstanding verdict
+     belongs to someone else — the round was answered whole and the
+     non-approvers re-requested (the review round, step 2);
+  3. every remaining acceptance criterion is operator-owned, stated as such
+     by triage on the issue.
+  Not parked — these are what the rule defends against: waiting on
+  yourself, waiting on CI, or waiting for a good moment. An issue you have
+  simply stopped working on is not parked either — that is abandonment,
+  and its move is unchanged: unassign and restore `ready` (Claiming,
+  below).
+  The 2026-07-23 board is why the rule counts work and not claims: one
+  builder correctly held
+  [#15](https://github.com/heavy-duty/ceremony/issues/15) (`offsite`,
+  round answered whole, one verdict outstanding) and
+  [#16](https://github.com/heavy-duty/ceremony/issues/16) (`needs-ruling`
+  hard block, triage said hold) parked beside the one active build,
+  [#73](https://github.com/heavy-duty/ceremony/issues/73).
 
 ## Claiming
 
@@ -20,6 +42,21 @@ triage bug, and the move is to say so on the issue, not to guess.
   starting. The claim is a promise of a draft PR soon — a claim with no PR
   and no activity is what the staleness sweep reclaims unless `offsite`
   records that its PR lives in another repository.
+- **A park is declared, never inferred.** When your claim enters a parked
+  shape (Picking, above), say so in a comment on that issue, naming what it
+  waits on and who owns the next move. No new label: the comment is
+  activity, so it feeds the same reclaim clock the `needs-ruling`
+  ([#52](https://github.com/heavy-duty/ceremony/issues/52)) and `offsite`
+  ([#68](https://github.com/heavy-duty/ceremony/issues/68)) exemptions
+  already guard — a parked claim nobody can name is an abandoned one.
+- **Unparking is a claim like any other.** When the wait ends, the parked
+  issue is work again and takes the slot. If you are already active
+  elsewhere, finish or release that work first, and say which you did on
+  both issues — the slot is still one. Nothing counts claims per builder
+  and no reconciler path enforces any of this: `claim_decision()` sees one
+  issue at a time by construction, and no such machinery should be built
+  expecting it to have been specified here. The discipline is the
+  declaration, not a counter.
 - **Abandoning is fine; ghosting is not.** If you stop, say where you got to,
   push the branch if it holds anything useful, unassign, and restore
   `ready`.
