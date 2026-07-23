@@ -23,6 +23,19 @@ check "missing triage actors fails loudly" 1 "missing triage-actors=" load_issue
 printf '%s\n' 'triage-actors=one' 'triage-actors=two' >"$TMP/duplicate.conf"
 check "duplicate triage actors fails loudly" 1 "duplicate triage-actors" load_issueflow_config "$TMP/duplicate.conf"
 
+# The dogfood caller and reusable workflow must expose the same runtime facts
+# as the documented consumer stub. Static pins catch YAML blocks drifting to
+# the adjacent composite step, which otherwise fails only after merge.
+check "dogfood caller wakes on issue events" 0 "  issues:" \
+  grep -F "  issues:" "$ROOT/.github/workflows/self-labels.yml"
+dogfood_pr_step="$(sed -n \
+  '/name: reconcile state + stale (dogfood/,/name: reconcile issue flow/p' \
+  "$ROOT/.github/workflows/labels.yml")"
+check "dogfood PR reconcile receives repository" 0 '          REPO: ${{ github.repository }}' \
+  grep -F '          REPO: ${{ github.repository }}' <<<"$dogfood_pr_step"
+check "dogfood PR reconcile receives token" 0 '          GH_TOKEN: ${{ github.token }}' \
+  grep -F '          GH_TOKEN: ${{ github.token }}' <<<"$dogfood_pr_step"
+
 # Invariant 1: exactly one queue category.
 check "one ready queue label is valid" 0 "KEEP" queue_decision <<<"ready"
 check "zero queue labels is derivably needs-triage" 0 "ADD_NEEDS_TRIAGE" queue_decision <<<"enhancement"

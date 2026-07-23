@@ -92,6 +92,9 @@ jobs:
         uses: ./actions/labels-reconcile
         with:
           bootstrap: ${{ github.event_name == 'workflow_dispatch' && 'yes' || 'no' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
       - name: reconcile issue flow
         if: github.repository != 'heavy-duty/ceremony'
         uses: ./.ceremony-src/actions/issueflow-reconcile
