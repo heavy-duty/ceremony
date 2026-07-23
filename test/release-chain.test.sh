@@ -89,11 +89,11 @@ chain() {
       *ceremony=yes*)
         # shellcheck source=lib/changelog.sh
         . "$ROOT/lib/changelog.sh"
-        notes="$(changelog_section CHANGELOG.md "$ver")"
-        if [ -z "$notes" ]; then
-          echo "chain: the changelog section for $ver is empty" >&2
+        diagnosis="$(changelog_section_problem CHANGELOG.md "$ver")" || {
+          printf 'chain: %s\n' "$diagnosis" >&2
           exit 1
-        fi
+        }
+        notes="$(changelog_section CHANGELOG.md "$ver")"
         printf 'notes: %s\n' "$notes"
         ;;
     esac
@@ -104,6 +104,31 @@ check "the ceremony merge decides ceremony=yes" 0 "ceremony=yes" \
   chain "$MERGE_SHA" "$BASE_SHA"
 check "the notes are the stamped section's prose" 0 \
   "notes: - The entry this release ships." chain "$MERGE_SHA" "$BASE_SHA"
+
+# The same ceremony facts with an entry-less stamped section must stop at the
+# notes door, before any tag or release mutation could run.
+git -C "$TMP/repo" reset -q --hard "$BASE_SHA"
+printf '0.7.0\n' >"$TMP/repo/VERSION"
+cat >"$TMP/repo/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## Unreleased
+
+## 0.7.0 — 2026-07-21
+
+### Added
+
+## 0.6.8 — 2026-07-01
+
+- An older entry.
+EOF
+git -C "$TMP/repo" add VERSION CHANGELOG.md
+git -C "$TMP/repo" commit -qm "release: entry-less 0.7.0"
+EMPTY_MERGE_SHA="$(git -C "$TMP/repo" rev-parse HEAD)"
+check "the notes door refuses an entry-less stamped section" 1 \
+  "section '0.7.0' has no entries" chain "$EMPTY_MERGE_SHA" "$BASE_SHA"
+
+git -C "$TMP/repo" reset -q --hard "$MERGE_SHA"
 
 # The same chain on an ordinary merge: -dev, unchanged — a green NOTICE
 # no-op that never consults the API (the stub would refuse a release view).

@@ -171,12 +171,32 @@ jobs:
         run: |
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/changelog.sh"
-          changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
-          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+          if ! diagnosis="$(changelog_section_problem CHANGELOG.md "$VER")"; then
             echo "CHANGELOG.md has no '## $VER' section at the merge commit — the ceremony PR must stamp it; refusing to publish an empty release" >&2
+            printf '%s\n' "$diagnosis" >&2
             exit 1
           fi
+          changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
+      - name: an entry-less stamped fixture is refused by the notes predicate
+        working-directory: ${{ runner.temp }}/fixture
+        env:
+          VER: ${{ steps.facts.outputs.ver }}
+        run: |
+          cp CHANGELOG.md "$RUNNER_TEMP/CHANGELOG.good.md"
+          awk -v ver="$VER" '
+            /^## / { in_section = ($2 == ver) }
+            in_section && /^[[:space:]]*[-*][[:space:]]/ { next }
+            { print }
+          ' "$RUNNER_TEMP/CHANGELOG.good.md" > CHANGELOG.md
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/changelog.sh"
+          if diagnosis="$(changelog_section_problem CHANGELOG.md "$VER")"; then
+            echo "entry-less stamped section unexpectedly passed" >&2
+            exit 1
+          fi
+          printf '%s\n' "$diagnosis" | grep -F "section '$VER' has no entries"
+          cp "$RUNNER_TEMP/CHANGELOG.good.md" CHANGELOG.md
       - name: the chain must land where the fixture says it lands
         env:
           CEREMONY: ${{ steps.decide.outputs.ceremony }}

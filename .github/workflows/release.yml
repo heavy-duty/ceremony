@@ -198,11 +198,12 @@ jobs:
         run: |
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/changelog.sh"
-          changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
-          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+          if ! diagnosis="$(changelog_section_problem CHANGELOG.md "$VER")"; then
             echo "CHANGELOG.md has no '## $VER' section at the merge commit — the ceremony PR must stamp it; refusing to publish an empty release" >&2
+            printf '%s\n' "$diagnosis" >&2
             exit 1
           fi
+          changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
       - name: nothing may exist yet — no tag, no release (re-runs refuse loudly)
         if: steps.decide.outputs.ceremony == 'yes'
@@ -342,11 +343,12 @@ jobs:
         run: |
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/changelog.sh"
-          changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
-          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+          if ! diagnosis="$(changelog_section_problem CHANGELOG.md "$VER")"; then
             echo "CHANGELOG.md has no '## $VER' section — stamp the Unreleased section in the release PR before tagging; refusing to publish an empty release" >&2
+            printf '%s\n' "$diagnosis" >&2
             exit 1
           fi
+          changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
           cat "$RUNNER_TEMP/notes.md"
       - name: artifact hook — the consumer's own release-artifact action
         # After the tag exists (it fired this door), before the publish —
