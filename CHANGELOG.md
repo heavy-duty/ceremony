@@ -6,6 +6,7 @@ so entries say what changed, cite the issue, and stop.
 
 ## Unreleased
 
+- `attention` doctrine — define its assignee-owned pickup, ack, queue and clock semantics across labels, triage, and builder roles (#85).
 - `attention` — add the issue-only, hand-set assignee-demand flag to the core label taxonomy (#84).
 - `issueflow-reconcile` — keep cross-repo references out of local dependency decisions and require triage to resolve cross-repo blockers by hand (#61).
 - `needs-ruling` — the cross-cutting flag for a pending human decision, excluded from `state:needs-human` and from the staleness sweep (#51).

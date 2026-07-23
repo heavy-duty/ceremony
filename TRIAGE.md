@@ -55,7 +55,10 @@ is the failure this whole flow exists to prevent.
    ([#50 D13–D14](https://github.com/heavy-duty/ceremony/issues/50)). You set
    the flag, so you also close it out ([LABELS.md](LABELS.md)): judge when
    agreement is reached, record the ruling as a decision in one comment,
-   remove the label, and return the issue to its flow in that same comment.
+   remove the label, and return the issue to its flow in that same comment;
+   when that ruling or any directive or answered builder question delivers
+   the assignee's next move in prose, set `attention` in the same comment.
+   This is not a substitute for minting work or for `needs-ruling`.
 4. **Decline.** Real idea, wrong repo or wrong time. Say why plainly, link
    where it belongs if anywhere, close. A refusal with reasons is a good
    outcome; a zombie discussion is not.

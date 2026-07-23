@@ -140,6 +140,33 @@ repaired, and epic-completion and PR-side stale behavior are unchanged. The
 sweep tells the assignee once when every visible cross-referenced PR has
 closed; it only tells, and never clears the flag or changes the claim.
 
+`attention` is issue-only and says a demand is parked on an issue for its
+assignee. Anyone who needs that assignee's hands — triage, the operator, or a
+sibling agent — sets it. The assignee alone clears it, as the first act of
+pickup together with a short comment; that removal is the acknowledgement
+and re-arms the flag for the next demand. If the session dies before the ack,
+the still-visible flag launches the next pickup instead. An unanswered flag
+is auditable evidence on the board.
+
+The flag is additive: it composes with `ready`, `claimed`, or `blocked` and
+with `needs-ruling`, and never substitutes for queue state. It pauses no
+clock. Unlike `offsite` and `needs-ruling`, which make silence legitimate,
+unanswered `attention` is exactly the silence the 48-hour reclaim should
+take. It is hand-set doctrine only: nothing in `actions/` sets, clears,
+reads, or validates it, and no reconciler enforces the assignee requirement.
+An `attention` issue without an assignee is therefore a board bug, not a
+demand; anyone may assign it or remove the flag.
+
+The three signals are mutually distinct: `attention` means an assignee owes
+a move; `needs-ruling` means a human owes a decision under
+[the escalation contract and ladder](BUILDER.md#the-ruling-ask); and a bare
+`@`-mention is an FYI that demands nothing and remains perfectly fine. A
+demand that is itself a human decision carries `needs-ruling`, never both.
+This distinction records the
+[#16 missed-ruling incident](https://github.com/heavy-duty/ceremony/issues/16#issuecomment-5061051198)
+and why the rejected mention poll is not returning: ordinary thread traffic
+re-arms mentions, but only the writer can declare that a move is owed (#83).
+
 ## Scope — which surface? (PRs and issues, any number)
 
 All scopes share one calm color, `#C5DEF5` — scopes locate, states alert. The
