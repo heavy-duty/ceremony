@@ -1,0 +1,32 @@
+name: Runner isolated
+description: >-
+  Assert that no `pull_request`- (or `pull_request_target`-) triggered
+  workflow names a self-hosted runner (#58). A pull_request workflow runs
+  the PR branch's code — from a fork, unreviewed code — and a self-hosted
+  runner executes it on our own hardware, inside our own network; the
+  fork-PR write-token and secrets toggles protect credentials, not the
+  runner. The rule is file-level, deliberately: a file whose trigger block
+  names pull_request and which names self-hosted anywhere fails, even
+  across jobs — the fix is to split the workflow. Known gaps, so silence
+  is never read as coverage: workflow_call reachability is not followed
+  (a pull_request caller plus a self-hosted callee goes unseen), and
+  indirection is not resolved (runner groups, matrix or expression values
+  for runs-on). A missing workflows directory is a pass. The caller must
+  have checked out its own repository first: the guard reads the
+  consumer's tree at the workspace.
+inputs:
+  workflows-dir:
+    description: >-
+      Directory scanned for `*.yml`/`*.yaml` workflow files. A missing
+      directory passes — a guard that fails on absence is a guard nobody
+      adopts.
+    required: false
+    default: .github/workflows
+runs:
+  using: composite
+  steps:
+    - name: runner isolated
+      shell: bash
+      env:
+        WORKFLOWS_DIR: ${{ inputs.workflows-dir }}
+      run: bash "$GITHUB_ACTION_PATH/runner-isolated.sh"
