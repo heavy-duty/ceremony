@@ -6,6 +6,8 @@ so entries say what changed, cite the issue, and stop.
 
 ## Unreleased
 
+- `needs-ruling` — the cross-cutting flag for a pending human decision, excluded from `state:needs-human` and from the staleness sweep (#51).
+
 ## 0.1.0 — 2026-07-22
 
 - `lib/version.sh` — one version abstraction, `file` and `package-json` backends (#3).

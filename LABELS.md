@@ -18,7 +18,7 @@ and the reconciler recomputes it from GitHub's own facts.
 |---|---|---|
 | `state:building` | `#FBCA04` | the builder — PR is a draft |
 | `state:bots-reviewing` | `#1D76DB` | the reviewer panel to finish the round (a request is live) |
-| `state:addressing` | `#D93F0B` | the builder — round complete without full approval, or nobody was asked, or a blocker is up |
+| `state:addressing` | `#D93F0B` | the builder — round complete without full approval, or nobody was asked, or a blocker is up, or a ruling is pending |
 | `state:needs-human` | `#8250DF` | the human — **this PR could be merged right now**: zero blockers, whole panel approved the current head |
 
 `bots-reviewing` vs `addressing` is deliberate: staleness in the first means
@@ -66,8 +66,30 @@ staleness sweep will reclaim (issue #18); until that machinery exists,
 |---|---|---|
 | `stale` | `#B60205` | no activity for 48h — sweep-managed, never hand-applied |
 | `blocked` | `#6A737D` | (see above — same label serves PRs waiting on another PR/issue; legitimately quiet, the staleness sweep skips it) |
+| `needs-ruling` | `#D4C5F9` | a human decision is required; the question, options and a recommendation are in the flagging comment. Set by triage or the builder; a state, not a signal — it clears on agreement, not on a reply |
 | `release` | `#0E8A16` | release flow, versioning, packaging work — and the ceremony PR itself |
 | `merge-next` | `#0E8A16` | head of the merge queue — merge this one next. Queue order is *intent*: never set by the reconciler, only cleared by it |
+
+`needs-ruling` marks where the human's turn is when the pending thing is a
+*decision*, not a merge (#50 settled it, D1–D10). It is not
+`state:needs-human`: that label means exactly "this PR could be merged right
+now", and the retired `state:needs-rebase` is the family's proof that a
+label meaning two things lies about both. It is not a `blocker:*` either:
+every blocker names work the *builder* owes, a ruling is owed by the human —
+and the flag must live on issues too, where blockers do not exist. On issues
+it coexists with the queue labels (the one-of-three invariant above ignores
+it); its color is the light shade of `state:needs-human`'s, so the human
+axis reads as one family. It is a state, not a signal: set only with the
+escalation contract (the question, the options, a recommendation — a bare
+flag is noise), it stays up until agreement is *reached* — a human reply
+alone does not clear it — and its setter closes it out: records the ruling
+as a decision in one comment, removes the label, and returns the item to
+its flow in that same comment, never as a side effect. If the human
+disagrees that agreement was reached, the label goes back on. The machine
+reads it and never writes it: the reconciler refuses `state:needs-human`
+while it stands (the PR falls to `state:addressing` — the ball on the PR is
+the builder's, who carries the ruling in), and the staleness sweep skips
+it, because waiting on a human is legitimately quiet.
 
 ## Scope — which surface? (PRs and issues, any number)
 
