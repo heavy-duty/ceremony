@@ -68,3 +68,9 @@ saw Y" outranks one that says "this looks like it might".
   with evidence until one side concedes or the builder escalates to the
   maintainer for a ruling. Two reviewers pulling a builder in opposite
   directions without resolution is a panel failure, not a builder failure.
+  The escalation is flagged `needs-ruling` — by the **builder**, never by
+  you: one accountable flag-setter per PR is what keeps the escalation
+  contract enforceable and hands the human one consolidated question
+  instead of three phrasings of it. Your job is to state the disagreement
+  precisely enough that the builder can write that escalation
+  ([LABELS.md](LABELS.md)).

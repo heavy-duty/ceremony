@@ -58,7 +58,13 @@ CONTRIBUTING; everything below is the shared flow.)
 3. Never dismiss a review, never merge, never mark your own work as passed.
    A blocking point you disagree with is answered with evidence or escalated
    in the PR — a maintainer can be asked for a ruling; silence and
-   force-forward are not options.
+   force-forward are not options. The ruling ask has mechanics: set
+   `needs-ruling` on the PR, with one comment carrying the question, the
+   options, and your recommendation — a panel deadlock is consolidated into
+   that one question, never forwarded as three phrasings of it. The label
+   stays until agreement is *reached*, not until the maintainer replies;
+   you record the ruling, remove the label, and return the PR to its flow
+   ([LABELS.md](LABELS.md)).
 
 ## Handoff
 

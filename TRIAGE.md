@@ -35,7 +35,14 @@ is the failure this whole flow exists to prevent.
 3. **Escalate.** The blocker is a *decision* only a human owns — scope,
    money, product direction, breaking a public contract. Say precisely what
    the decision is, list the options with your recommendation, and name the
-   decider. The discussion is where humans decide; wait there.
+   decider. The discussion is where humans decide; wait there. When the
+   decision blocks something already on the board — an existing issue, or
+   minted work a discussion's ruling gates — set `needs-ruling` on it too,
+   so the board shows where the human's turn is; the issue keeps its queue
+   label. You set the flag, so you close it out ([LABELS.md](LABELS.md)):
+   judge when agreement is reached, record the ruling as a decision in one
+   comment, remove the label, and return the issue to its flow in that same
+   comment.
 4. **Decline.** Real idea, wrong repo or wrong time. Say why plainly, link
    where it belongs if anywhere, close. A refusal with reasons is a good
    outcome; a zombie discussion is not.
