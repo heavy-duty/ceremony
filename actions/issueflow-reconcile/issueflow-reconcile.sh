@@ -105,7 +105,17 @@ claim_reclaim_marker() { # $1 = last activity epoch
   printf 'claim-reclaimed-%s\n' "$1"
 }
 
-blocked_references() { # body on stdin -> issue numbers, one per line
+issue_references() { # text on stdin -> LOCAL/CROSS<TAB>reference
+  # A qualified reference belongs to another repository. Classify the whole
+  # token before extracting numbers so rig#112 can never become local #112.
+  { grep -Eo '([[:alnum:]_.-]+/)?[[:alnum:]_.-]+#[0-9]+|#[0-9]+' || true; } \
+    | awk '
+      index($0, "#") == 1 { print "LOCAL\t" substr($0, 2); next }
+      { print "CROSS\t" $0 }
+    '
+}
+
+blocked_reference_records() { # body on stdin -> classified reference records
   # Dependency declarations sometimes soft-wrap after a comma. Continue
   # through the first sentence terminator; if prose omits one, conservatively
   # retain later references so ambiguity can keep an issue blocked, never
@@ -128,13 +138,21 @@ blocked_references() { # body on stdin -> issue numbers, one per line
       }
       print line
     }
-  ' \
-    | { grep -Eo '#[0-9]+' || true; } | tr -d '#' | sort -nu
+  ' | issue_references
 }
 
-blocked_decision() { # $1 refs, $2 OPEN/CLOSED states
-  local refs="$1" states="$2"
-  if [ -z "$refs" ]; then echo FLAG_UNPARSEABLE
+blocked_references() { # body on stdin -> local issue numbers, one per line
+  blocked_reference_records | awk -F '\t' '$1 == "LOCAL" { print $2 }' | sort -nu
+}
+
+blocked_cross_references() { # body on stdin -> qualified refs, one per line
+  blocked_reference_records | awk -F '\t' '$1 == "CROSS" { print $2 }' | sort -u
+}
+
+blocked_decision() { # $1 local refs, $2 OPEN/CLOSED states, $3 cross-repo refs
+  local refs="$1" states="$2" cross_refs="${3:-}"
+  if [ -n "$cross_refs" ]; then echo FLAG_CROSS_REPO
+  elif [ -z "$refs" ]; then echo FLAG_UNPARSEABLE
   elif grep -qxF OPEN <<<"$states"; then echo KEEP
   elif grep -qxF UNKNOWN <<<"$states"; then echo FLAG_UNPARSEABLE
   else echo READY
@@ -146,8 +164,8 @@ epic_references() { # markdown task-list issue references from body on stdin
     tolower($0) ~ /^##[[:space:]]+task list[[:space:]]*$/ { in_list = 1; next }
     in_list && /^#/ { exit }
     in_list && /^[[:space:]]*[-*][[:space:]]+\[[ xX]\]/ { print }
-  ' \
-    | { grep -Eo '#[0-9]+' || true; } | tr -d '#' | sort -nu
+  ' | issue_references \
+    | awk -F '\t' '$1 == "LOCAL" { print $2 }' | sort -nu
 }
 
 epic_decision() { # $1 refs, $2 states
@@ -190,7 +208,7 @@ last_issue_activity() {
 }
 
 reconcile_issue() {
-  local n="$1" decision refs states age assignees open_pr=false label owners
+  local n="$1" decision refs cross_refs states age assignees open_pr=false label owners
   decision="$(queue_decision <<<"$ISSUE_LABELS")"
   case "$decision" in
     ADD_NEEDS_TRIAGE)
@@ -229,9 +247,13 @@ reconcile_issue() {
     esac
   elif has_issue_label blocked; then
     refs="$(blocked_references <<<"$(jq -r '.body // ""' <<<"$ISSUE_JSON")")"
+    cross_refs="$(blocked_cross_references <<<"$(jq -r '.body // ""' <<<"$ISSUE_JSON")")"
     states="$(reference_states <<<"$refs")"
-    decision="$(blocked_decision "$refs" "$states")"
+    decision="$(blocked_decision "$refs" "$states" "$cross_refs")"
     case "$decision" in
+      FLAG_CROSS_REPO)
+        ensure_comment "$n" blocked-cross-repo \
+          "This issue's \`Blocked by\` declaration names cross-repo dependencies that the sweep cannot resolve: $(tr '\n' ' ' <<<"$cross_refs" | sed 's/[[:space:]]*$//'). Triage must verify those dependencies and flip this issue to \`ready\` by hand." ;;
       FLAG_UNPARSEABLE)
         ensure_comment "$n" blocked-unparseable \
           'This issue is `blocked`, but its body has no parseable `Blocked by #N` declaration. The sweep will not guess the dependency.' ;;

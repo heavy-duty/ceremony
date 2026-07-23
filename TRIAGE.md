@@ -65,7 +65,9 @@ Every issue you mint carries, in this order:
   the builder's definition of done and the reviewer's review spec, verbatim.
 - **Test plan**: what proves it, including the cases that must fail.
 - **Dependencies**: `Blocked by #N` / `Blocks #N`, and `Part of #E` when an
-  epic organizes it.
+  epic organizes it. Name a cross-repo dependency the same way with its
+  repository qualified (`Blocked by repo#N` or `owner/repo#N`); the sweep
+  cannot resolve it, so triage verifies it and flips the issue by hand.
 - **Labels**: type (`bug`/`enhancement`/`documentation`), `scope:*`, and
   exactly one of `ready` / `blocked` (see [LABELS.md](LABELS.md)).
 
