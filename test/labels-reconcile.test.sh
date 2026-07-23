@@ -592,5 +592,168 @@ expect "exactly one nudge across both sweeps" \
 expect "no label edit across both sweeps names the ruling flag" \
   no "$(grep -q 'needs-ruling' "$RTMP/edits" 2>/dev/null && echo yes || echo no)"
 
+# ---------------------------------------------------------------------------
+# bootstrap_labels retires the GitHub defaults (#93). LABELS.md published
+# them as deleted at bootstrap; nothing deleted them — incubator's first
+# dispatch (run 30041309187) ran green and left `good first issue` standing,
+# the first honest read of the machine since the older repos were cleaned by
+# hand. One registry beside the taxonomy, dispatch-only, and never fatal:
+# absence is the NORMAL case from the second dispatch on (#91's set -e
+# shape), and a 403 refusal must not cost the taxonomy the token CAN create.
+# ---------------------------------------------------------------------------
+BOOT="$RTMP/bootstrap"
+mkdir -p "$BOOT"
+
+RETIRED_WANT='duplicate
+invalid
+question
+wontfix
+help wanted
+good first issue'
+expect "the retired registry is exactly the six, no seventh" \
+  "$RETIRED_WANT" "$(retired_label_names)"
+# the sentence and the registry must not drift apart again: parse the names
+# out of LABELS.md's own parenthetical and demand identity, name for name
+# shellcheck disable=SC2016 # the backticks are LABELS.md literals, not expansions
+doctrine="$(sed -n '/Default GitHub labels/,/are deleted at/p' LABELS.md \
+  | tr '\n' ' ' | sed 's/.*(//;s/).*//' | grep -o '`[^`]*`' | tr -d '`')"
+expect "...and matches LABELS.md name for name" "$doctrine" "$(retired_label_names)"
+
+expected_upserts="$({ core_label_rows; configured_label_rows .github/labels.conf; } | cut -d'|' -f1)"
+
+# -- happy path: the deletes ride the same dispatch, after an unchanged upsert set
+(
+  REPO=owner/repo LABELS_CONF=.github/labels.conf
+  run() { printf '%s\n' "$*" >>"$BOOT/happy"; }
+  bootstrap_labels
+)
+expect "a dispatch deletes the six in the same run as the upserts" \
+  "$RETIRED_WANT" \
+  "$(sed -n 's/^gh label delete \(.*\) -R owner\/repo --yes$/\1/p' "$BOOT/happy")"
+expect "...and the recorded upsert set is unchanged from today's" \
+  "$expected_upserts" \
+  "$(sed -n 's/^gh label create \([^ ]*\) .*/\1/p' "$BOOT/happy")"
+
+# -- a missing label is success: gh exits non-zero with not-found, and the
+#    guard keeps that from aborting the dispatch. Red without the guard.
+boot_missing_probe() {
+  (
+    REPO=owner/repo LABELS_CONF=.github/labels.conf
+    run() { "$@"; }
+    # shellcheck disable=SC2317 # reached through run's "$@", opaque to shellcheck
+    gh() {
+      if [ "$1" = label ] && [ "$2" = delete ]; then
+        printf '%s\n' "$3" >>"$BOOT/missing-deletes"
+        echo "could not delete label: HTTP 404: Not Found" >&2
+        return 1
+      fi
+    }
+    bootstrap_labels
+  ) 2>&1
+}
+missing_rc=0
+missing_out="$(boot_missing_probe)" || missing_rc=$?
+expect "an already-absent label does not abort the dispatch" 0 "$missing_rc"
+expect "...every deletion still ran" "$RETIRED_WANT" "$(cat "$BOOT/missing-deletes")"
+expect "...and each absence is logged at most once per name" \
+  1 "$(grep -c "retire: 'question'" <<<"$missing_out")"
+
+# -- a refusal is tolerated: the blocker:drill-pending 403 shape, on a delete.
+#    The other five still go, the taxonomy still lands, the log says who.
+boot_refusal_probe() {
+  (
+    REPO=owner/repo LABELS_CONF=.github/labels.conf
+    run() { "$@"; }
+    # shellcheck disable=SC2317 # reached through run's "$@", opaque to shellcheck
+    gh() {
+      if [ "$1" = label ] && [ "$2" = delete ]; then
+        if [ "$3" = question ]; then
+          echo "HTTP 403: Resource not accessible by integration" >&2
+          return 1
+        fi
+        printf '%s\n' "$3" >>"$BOOT/refusal-deletes"
+      elif [ "$1" = label ] && [ "$2" = create ]; then
+        printf '%s\n' "$3" >>"$BOOT/refusal-creates"
+      fi
+    }
+    bootstrap_labels
+  ) 2>&1
+}
+refusal_rc=0
+refusal_out="$(boot_refusal_probe)" || refusal_rc=$?
+expect "a refused delete does not abort the dispatch" 0 "$refusal_rc"
+expect "...the other five still deleted" "duplicate
+invalid
+wontfix
+help wanted
+good first issue" "$(cat "$BOOT/refusal-deletes")"
+expect "...the taxonomy still upserted whole" \
+  "$expected_upserts" "$(cat "$BOOT/refusal-creates")"
+expect "...and the log names the refused label" \
+  yes "$(grep -q "retire: 'question'" <<<"$refusal_out" && echo yes || echo no)"
+
+# -- DRY_RUN narrates the deletions like every other mutation, and does none
+boot_dry_probe() {
+  (
+    REPO=owner/repo LABELS_CONF=.github/labels.conf DRY_RUN=1
+    # shellcheck disable=SC2317 # reached through run's "$@", opaque to shellcheck
+    gh() { printf '%s\n' "$*" >>"$BOOT/dry-real"; }
+    bootstrap_labels
+  )
+}
+dry_out="$(boot_dry_probe)"
+expect "DRY_RUN narrates each deletion" \
+  6 "$(grep -c '^labels: DRY_RUN: gh label delete' <<<"$dry_out")"
+expect "...and performs none" \
+  no "$(test -f "$BOOT/dry-real" && echo yes || echo no)"
+
+# -- the case a sourced probe cannot see (#91): the script EXECUTED, set -e
+#    live, every delete failing the way the second dispatch of every repo
+#    fails. The run must end green with the taxonomy created whole.
+EXEC="$RTMP/bootstrap-exec"
+mkdir -p "$EXEC/stub"
+cat >"$EXEC/stub/gh" <<'EOF'
+#!/usr/bin/env bash
+case "$1 $2" in
+  "label delete")
+    printf 'delete %s\n' "$3" >>"$GH_RECORD"
+    echo "could not delete label: HTTP 404: Not Found (owner/repo)" >&2
+    exit 1 ;;
+  "label create")
+    printf 'create %s\n' "$3" >>"$GH_RECORD" ;;
+esac
+exit 0
+EOF
+chmod +x "$EXEC/stub/gh"
+printf 'panel=bot-a bot-b bot-c\n' >"$EXEC/labels.conf"
+
+exec_env() { # $1 = event name → the real script, executed under the PATH stub
+  : >"$EXEC/record"
+  env PATH="$EXEC/stub:$PATH" GH_RECORD="$EXEC/record" \
+    REPO=owner/repo LABELS_CONF="$EXEC/labels.conf" GITHUB_EVENT_NAME="$1" \
+    bash actions/labels-reconcile/labels-reconcile.sh
+}
+
+exec_rc=0
+exec_out="$(exec_env workflow_dispatch 2>&1)" || exec_rc=$?
+expect "an executed dispatch with all six absent completes green" 0 "$exec_rc"
+expect "...reaching the end of the sweep" \
+  yes "$(grep -q 'reconciled.' <<<"$exec_out" && echo yes || echo no)"
+expect "...having attempted all six deletions" \
+  6 "$(grep -c '^delete ' "$EXEC/record")"
+expect "...and created the full taxonomy" \
+  "$(core_label_rows | cut -d'|' -f1)" \
+  "$(sed -n 's/^create //p' "$EXEC/record")"
+
+# -- bootstrap is dispatch-only, deletes included: the cron and
+#    pull_request_target paths touch no label
+for ev in schedule pull_request_target; do
+  ev_rc=0
+  exec_env "$ev" >/dev/null 2>&1 || ev_rc=$?
+  expect "the $ev path completes green" 0 "$ev_rc"
+  expect "...and deletes nothing" \
+    no "$(grep -q '^delete ' "$EXEC/record" && echo yes || echo no)"
+done
+
 printf 'labels-reconcile tests: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
