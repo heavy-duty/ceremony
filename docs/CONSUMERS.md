@@ -121,7 +121,19 @@ precisely so the machinery is safe to work on
 - [ ] Trim the repo's test suite to repo-specific tests: the machinery
       tests go — they live in this repo's `test/` now, run by its CI —
       while the repo's own surfaces stay (box/rig's install-channel halves
-      of `test/release.sh`, cast's `install-sh` tests).
+      of `test/release.sh`, cast's `install-sh` tests). A machinery test
+      *file* goes whole when its subject moved (rig's
+      `test/labels-reconcile.sh` sourced the deleted reconciler), and so
+      do tests that pin the old workflow's shape — a grep or awk against
+      `release.yml`/`ci.yml` internals fails against the caller stub, not
+      because the stub is wrong (rig #13's conversion).
+- [ ] Sweep the repo's other docs for pointers at the deleted paths —
+      `drills/README.md` and any labels doc typically cite the old
+      `.github/scripts/*.sh` by path; repoint them at the pinned actions.
+      A repo carrying its own copy of a doc the mirror vendors (rig's
+      root `LABELS.md`) retires it in the same PR: a hand-maintained
+      copy beside a machine-verified mirror is the drift the mirror
+      exists to end.
 - [ ] Shrink CONTRIBUTING's release section to a pointer at
       [this repo's README](../README.md) plus what is genuinely per-repo:
       the drill meaning (`drills/README.md`), artifact notes, the
@@ -241,6 +253,10 @@ scope:docs|C5DEF5|Documentation
 
 The panel is whitespace-separated. Label rows use exactly
 `name|color|description`; blank lines are ignored and extra pipes are refused.
+There are no comment lines: every non-blank line must be the `panel=`
+setting or a label row, so `#`-prefixed prose is a parse failure, not a
+comment (rig #13's conversion found this the hard way — keep the file data
+only).
 Core state, blocker, work-queue, and release labels come from ceremony. Scope
 rows remain consumer-owned because paths and surfaces differ by repository.
 
