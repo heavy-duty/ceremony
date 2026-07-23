@@ -396,4 +396,93 @@ churned="$(issue_probe 24 $'claimed\nneeds-ruling')"
 check "8 real-quiet days nudge through a 2-day-old label churn" 0 "" \
   grep -q 'ruling nudge' <<<"$churned"
 
+# ---------------------------------------------------------------------------
+# The arrival path, executed the way the action executes it (#91): four
+# triage-authored mints died silently because the stand-down `return`s in
+# reconcile_opened_issue carried the failed test's status into `set -e`. A
+# sourced test takes the `set -u`-only branch and is blind to that class of
+# bug by construction, so these run the script as a subprocess behind a
+# PATH-stubbed gh — the house pattern from test/release-chain.test.sh.
+# ---------------------------------------------------------------------------
+ARRIVAL="$TMP/arrival"
+mkdir -p "$ARRIVAL/stub" "$ARRIVAL/fixtures"
+printf 'triage-actors=triage-one triage-two\n' >"$ARRIVAL/labels.conf"
+cat >"$ARRIVAL/stub/gh" <<'EOF'
+#!/usr/bin/env bash
+# Endpoints map to files under $GH_FIXTURES ('/?&=' -> '_'); an absent file
+# answers an empty list, a .error sentinel fails the call like a dead API.
+if [ "$1" = api ]; then
+  shift
+  endpoint="" jqexpr=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --jq) jqexpr="$2"; shift ;;
+      -f|-F) shift ;;
+      -*) ;;
+      *) [ -n "$endpoint" ] || endpoint="$1" ;;
+    esac
+    shift
+  done
+  file="$GH_FIXTURES/$(printf '%s' "$endpoint" | tr '/?&=' '____').json"
+  [ ! -f "$file.error" ] || exit 1
+  if [ -f "$file" ]; then payload="$(cat "$file")"; else payload='[]'; fi
+  if [ -n "$jqexpr" ]; then jq -r "$jqexpr" <<<"$payload"; else printf '%s\n' "$payload"; fi
+  exit 0
+fi
+if [ "$1" = issue ]; then printf '%s\n' "$*" >>"$GH_FIXTURES/edits"; exit 0; fi
+echo "gh stub: unexpected call: gh $*" >&2
+exit 97
+EOF
+chmod +x "$ARRIVAL/stub/gh"
+printf '%s\n' \
+  '{"data":{"repository":{"pullRequests":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}}' \
+  >"$ARRIVAL/fixtures/graphql.json"
+arrival_fixture() { printf '%s\n' "$1" >"$ARRIVAL/fixtures/repos_owner_repo_issues_91.json"; }
+arrival_run() {
+  : >"$ARRIVAL/fixtures/edits"
+  env PATH="$ARRIVAL/stub:$PATH" GH_FIXTURES="$ARRIVAL/fixtures" \
+    REPO=owner/repo LABELS_CONF="$ARRIVAL/labels.conf" \
+    EVENT_NAME=issues EVENT_ACTION=opened EVENT_ISSUE=91 \
+    bash "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
+}
+
+arrival_fixture '{"user":{"login":"triage-one"},"labels":[{"name":"ready"}]}'
+triage_out="$(arrival_run 2>&1)"
+triage_rc=$?
+check "a triage-authored arrival exits 0 (#91's four dead mints)" 0 "" \
+  test "$triage_rc" -eq 0
+check "...and its output reaches the sweep" 0 "" \
+  grep -qF 'issueflow: reconciled.' <<<"$triage_out"
+check "...and mints nothing" 1 "" test -s "$ARRIVAL/fixtures/edits"
+
+arrival_fixture '{"user":{"login":"outsider"},"labels":[{"name":"ready"}]}'
+outside_out="$(arrival_run 2>&1)"
+outside_rc=$?
+check "an outside-authored arrival exits 0" 0 "" test "$outside_rc" -eq 0
+check "...still mints needs-triage" 0 "" \
+  grep -qF 'needs-triage (opened by outsider)' <<<"$outside_out"
+check "...still strips the smuggled queue label" 0 "" \
+  grep -qxF 'issue edit 91 -R owner/repo --add-label needs-triage --remove-label ready' \
+  "$ARRIVAL/fixtures/edits"
+check "...and the sweep still runs after the mint" 0 "" \
+  grep -qF 'issueflow: reconciled.' <<<"$outside_out"
+
+arrival_fixture '{"user":{"login":"outsider"},"labels":[],"pull_request":{"url":"x"}}'
+pr_out="$(arrival_run 2>&1)"
+pr_rc=$?
+check "a PR arrival exits 0" 0 "" test "$pr_rc" -eq 0
+check "...stands down without minting" 1 "" test -s "$ARRIVAL/fixtures/edits"
+check "...and the sweep still runs" 0 "" \
+  grep -qF 'issueflow: reconciled.' <<<"$pr_out"
+
+# D2 preserved: only the deliberate stand-downs changed; a genuine failure on
+# the arrival path still kills the run loudly.
+: >"$ARRIVAL/fixtures/repos_owner_repo_issues_91.json.error"
+err_out="$(arrival_run 2>&1)"
+err_rc=$?
+check "a dead API on the arrival path still fails the run (D2)" 0 "" \
+  test "$err_rc" -eq 1
+check "...and the sweep does not run over a lying arrival" 1 "" \
+  grep -qF 'issueflow: reconciled.' <<<"$err_out"
+
 summary
