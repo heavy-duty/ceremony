@@ -49,6 +49,10 @@ triage bug, and the move is to say so on the issue, not to guess.
   ([#52](https://github.com/heavy-duty/ceremony/issues/52)) and `offsite`
   ([#68](https://github.com/heavy-duty/ceremony/issues/68)) exemptions
   already guard — a parked claim nobody can name is an abandoned one.
+- **Pick up `attention` before anything else.** On your claim, first post a
+  short pickup comment and remove `attention`; the removal is the ack. A
+  demand on a parked claim is usually its unpark, so take the slot back under
+  the existing rule below rather than leaving the demand parked.
 - **Unparking is a claim like any other.** When the wait ends, the parked
   issue is work again and takes the slot. If you are already active
   elsewhere, finish or release that work first, and say which you did on
