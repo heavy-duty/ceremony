@@ -347,10 +347,10 @@ Bumping the pin re-syncs the mirror in the same PR —
   [releases page](https://github.com/heavy-duty/ceremony/releases) is
   that section, verbatim). One bump PR updates **every** ceremony `uses:`
   reference in the repo to the new tag — the workflow callers *and* each
-  guard step. The exact count is tag-dependent: it is the caller plus the
-  guards that the pinned tag carries. Changing only one line
-  leaves the consumer split across ceremony versions, which the same-tag
-  rule above forbids. A repo that has adopted the agent team flow
+  guard step. The exact count is tag-dependent: it is the workflow caller
+  or callers plus the guards that the pinned tag carries. Changing only
+  one line leaves the consumer split across ceremony versions, which the
+  same-tag rule above forbids. A repo that has adopted the agent team flow
   additionally bumps the mirror in the same PR —
   [the pin-bump procedure](#the-pin-bump-procedure).
 - **One pin governs machinery and doctrine.** The ref in the consumer's
