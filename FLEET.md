@@ -44,6 +44,45 @@ Every box runs the same skeleton, adapted to its CLI:
 
 ### Wake conditions
 
+One wake is shared by all three roles, so it is stated once instead of pasted
+into each list: **an open issue assigned to me carrying `attention`.** Anyone
+can be an assignee, which is why the trigger is role-independent — triage,
+builders and reviewers all carry it, and the pickup session is the same shape
+in each. It runs **first, ahead of everything in the per-role lists below** —
+for builders, ahead of resume: a demand parked by triage, the operator or a
+sibling agent outranks self-directed continuation, and it is frequently the
+very thing that unparks the work resume would otherwise pick up. The query is
+the authenticated-user endpoint —
+`gh api "/issues?filter=assigned&state=open&labels=attention"` — one call, no
+search index (the reviewer trigger below already records that the index
+lags), and like the review-request trigger it reaches repos `~/duty/repos.txt`
+does not name.
+
+Each demand gets **exactly one session, and the ack bounds it**: the
+session's first act, before any of the demanded work, is the pickup comment
+plus removing the label — [the `attention`
+contract's](https://github.com/heavy-duty/ceremony/blob/bce09aa7648dbd74b8e91b1d4fbc2fa8d145f705/LABELS.md#L143-L149)
+ack, made here concretely the ack-then-act ordering of the session (#85).
+Then it acts on the thread and exits — short by construction. Until the label
+is removed the flag is still up, so a session that dies before acking is
+simply relaunched at the next tick; that is the whole crash-recovery story,
+and it is the same crash-only shape as resume below.
+
+The design this replaces was built and rejected: polling notifications for
+`reason: mention` re-arms a thread on every comment, so ordinary round
+traffic — verdicts naming the builder, the builder's own replies echoing back
+— burns a full agent session per tick on nothing actionable; a mention
+answers *"was I named?"*, not *"am I needed?"*. The incident that bought the
+wake: [#16's 16:49Z
+ruling](https://github.com/heavy-duty/ceremony/issues/16#issuecomment-5061051198)
+authorized the last open acceptance criterion on a `claimed` issue and sat
+unowned for over an hour — the box answered every state signal that day and
+never saw the comment, and the eventual pickup ran on a manual bridge. Like
+the notifier's queue below, this wake is the spec for a box-side change only
+the operator can make; until `duty.sh` polls it, the wake exists on paper —
+though one consumer already polls for the label and no-ops while it is
+absent, so the wiring can be verified live the day the row lands.
+
 - **Triage:** new discussions to mint from, builder questions on issues, stray
   issues to reconcile, `@`-mentions, hourly hygiene (stale claims, label
   invariants), and a `needs-ruling` standing **past 24h** — the ladder's last
