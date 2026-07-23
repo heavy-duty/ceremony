@@ -26,8 +26,14 @@ triage bug, and the move is to say so on the issue, not to guess.
 ## Building
 
 - Branch per issue; open the PR **as a draft early**, `Closes #N` in the
-  body. Drafts are invisible to the reviewer panel on purpose — the draft
-  phase is yours.
+  body. `Closes #N` does not cross repos: when the PR is in a different repo
+  from its authorizing issue, use `Part of <owner>/<repo>#N` instead, and
+  comment on that issue with the draft PR link as soon as the draft opens.
+  Triage closes the authorizing issue by hand when its acceptance criteria
+  are met; the cross-repo merge never closes it. This codifies the linkage
+  builders already used on rig#112 and ceremony #13/#16 rather than adding a
+  new review obligation. Drafts are invisible to the reviewer panel on
+  purpose — the draft phase is yours.
 - **The issue's acceptance criteria are your definition of done.** Reproduce
   them as a checklist in the PR body and check them honestly as you go. If
   one turns out to be wrong or unreachable, say so on the issue and get it
@@ -49,8 +55,17 @@ triage bug, and the move is to say so on the issue, not to guess.
 panel roster and any repo-specific flow notes live in that repo's own
 CONTRIBUTING; everything below is the shared flow.)
 
-1. Mark ready-for-review; request **the whole panel** (the roster is in the
-   repo's CONTRIBUTING).
+1. Mark ready-for-review; request **the whole panel**. The panel is the roster
+   of the repo the **PR** is in, minus you — never the roster of the repo the
+   issue is in. The PR repo's `.github/labels.conf` `panel=` line is the
+   machine's answer; its CONTRIBUTING roster is the human-readable answer,
+   and `panel=` governs if they disagree because that is what the state
+   machine reads. If the PR repo names no roster, ask triage on the
+   authorizing issue before marking ready-for-review; do not guess. You may
+   request an off-panel reviewer, but say that their verdict is advisory and
+   does not become required. On rig#112 this distinction mattered: requesting
+   codex and grok was correct for rig's panel even though ceremony's bench was
+   larger, and the doctrine had not said which roster governed.
 2. **Wait for every verdict, then answer the round whole** — one reply
    covering every point, then push the fixes, then re-request exactly the
    reviewers who did not approve. Prefer verification over argument: when a

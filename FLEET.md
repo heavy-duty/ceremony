@@ -54,9 +54,18 @@ Every box runs the same skeleton, adapted to its CLI:
   fully approved (write the closing summary, flip to `state:needs-human`,
   request the human), my PR `CONFLICTING` (rebase; never act on `UNKNOWN` —
   post-merge flap).
-- **Reviewers:** an open PR by someone else whose head I have not yet
-  reviewed — one verdict per head, deduplicated against my own latest review's
-  SHA, not against the search index (it lags).
+- **Reviewers**, in priority order: first, a review requested on me in any
+  repo (`gh search prs --review-requested=@me --state=open`); second, the
+  repo-list poll for an open PR by someone else whose head I have not yet
+  reviewed. Both triggers keep the existing one-verdict-per-head rule,
+  deduplicated against my own latest review's SHA rather than the search index
+  (it lags). The request trigger runs first because it reaches repos the list
+  does not name.
+
+`~/duty/repos.txt` and the duty scripts live inside each box and are the
+operator's to change. This descriptive edit is the spec for those box-side
+updates; until an operator makes them, the request trigger exists on paper
+only.
 
 ### Resilience
 
