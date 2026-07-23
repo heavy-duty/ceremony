@@ -90,10 +90,23 @@ check "real issue 15 inline blocker parses" 0 "" test \
 body="Part of #1. Blocked by #11, #12 (needs a released ceremony + the bootstrap guide); benefits from #13's lessons but does not need #14/#15."
 check "real issue 16 inline blockers parse" 0 "" test \
   "$(blocked_references <<<"$body")" = $'11\n12'
+check "qualified short repository reference drops" 0 "" test \
+  -z "$(blocked_references <<<"Blocked by rig#112.")"
+check "qualified owner/repository reference drops" 0 "" test \
+  -z "$(blocked_references <<<"Blocked by heavy-duty/box#9.")"
+check "parenthesized local reference survives" 0 "13" blocked_references <<<"Blocked by (#13)."
+check "slash-adjacent local references survive" 0 $'14\n15' \
+  blocked_references <<<"Blocked by #14/#15."
+check "comma-adjacent local references survive" 0 $'11\n12' \
+  blocked_references <<<"Blocked by #11, #12."
 check "open blocker keeps issue blocked" 0 "KEEP" blocked_decision "$refs" $'CLOSED\nOPEN'
 check "all closed blockers release issue" 0 "READY" blocked_decision "$refs" $'CLOSED\nCLOSED'
 check "missing blocked declaration is flagged" 0 "FLAG_UNPARSEABLE" blocked_decision "" ""
 check "unreadable blocker is flagged" 0 "FLAG_UNPARSEABLE" blocked_decision "12" "UNKNOWN"
+check "cross-repo-only blocker is flagged distinctly" 0 "FLAG_CROSS_REPO" \
+  blocked_decision "" "" "rig#112"
+check "cross-repo blocker prevents false promotion when locals close" 0 "FLAG_CROSS_REPO" \
+  blocked_decision "9" "CLOSED" "rig#9"
 
 # Invariant 4: only configured triage actors mint directly into the queue.
 check "triage-authored ready issue is accepted" 0 "KEEP" author_decision true <<<"ready"
@@ -107,6 +120,9 @@ check "epic parser reads task-list refs only" 0 $'2\n3' printf '%s\n' "$epic_ref
 body=$'## Task list\n- [x] #2 done\n- [x] #3 done\n\n## Definition of done\n- [ ] open issue #99 must not suppress the nudge'
 check "epic parser stops before later checkbox sections" 0 "" test \
   "$(epic_references <<<"$body")" = $'2\n3'
+body=$'## Task list\n- [x] #2 Scaffold\n- [x] #3 version\n- [ ] #13 Convert rig (pilot) — **PR [rig#112](https://github.com/heavy-duty/rig/pull/112) is approved by the whole panel on head `3c72c1b` and sits at `state:needs-human` since 2026-07-23 10:47Z; the merge is the human'\''s. #14/#15 unblock when it lands**\n- [ ] #14 Convert box\n- [ ] #15 Convert cast\n- [ ] #16 Adopt in incubator'
+check "real epic 1 row drops rig PR while retaining local children" 0 $'2\n3\n13\n14\n15\n16' \
+  epic_references <<<"$body"
 check "completed epic is nudged" 0 "NUDGE" epic_decision "$epic_refs" $'CLOSED\nCLOSED'
 check "open epic child suppresses nudge" 0 "KEEP" epic_decision "$epic_refs" $'CLOSED\nOPEN'
 check "epic without parseable children is stable" 0 "KEEP" epic_decision "" ""
