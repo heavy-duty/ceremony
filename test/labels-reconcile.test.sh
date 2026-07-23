@@ -489,5 +489,93 @@ unstale="$(ruling_probe "$(printf 'needs-ruling\nstale')")"
 expect "...and an already-applied stale comes off" \
   yes "$(grep -q 'unstale' <<<"$unstale" && echo yes || echo no)"
 
+# ---------------------------------------------------------------------------
+# The ruling pass on the PR surface (#52): the bare-flag check and the 7-day
+# nudge ride reconcile_pr behind the flag, on the same real-activity
+# computation the stale sweep reads. A recording stub serves the API facts:
+# fixture JSON per endpoint (with the caller's --jq applied by real jq),
+# posted comments appended back into the fixture so a second sweep sees the
+# first one's writes, and every label edit recorded.
+# ---------------------------------------------------------------------------
+RTMP="$(mktemp -d)"
+trap 'rm -rf "$RTMP"' EXIT
+iso_at() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ; }
+RNOW=2000000000
+
+ruling_sweep_probe() { # $1 = the PR's labels → reconcile_pr's log lines
+  (
+    REPO_LABELS="$(printf 'state:addressing\nstate:needs-human\nmerge-next\nstale\nneeds-ruling')"
+    REPO=owner/repo NOW="$RNOW"
+    LABELS="$1"
+    DRAFT=false HEAD_SHA=head1 REQUESTED=""
+    # Approvals submitted 8 days ago — the newest real activity anywhere.
+    REVIEWS_JSON="$(reviews \
+      "$(rev "$BOT1" APPROVED head1 "" "$(iso_at $((RNOW - 8 * 86400)))")" \
+      "$(rev "$BOT2" APPROVED head1 "" "$(iso_at $((RNOW - 8 * 86400)))")" \
+      "$(rev "$BOT3" APPROVED head1 "" "$(iso_at $((RNOW - 8 * 86400)))")")"
+    MERGEABLE=MERGEABLE CHECKS=SUCCESS
+    PR_JSON="$(jq -n --arg at "$(iso_at $((RNOW - 10 * 86400)))" '{created_at: $at}')"
+    run() { "$@"; } # mutations reach the stub and are recorded, not swallowed
+    gh() {
+      if [ "$1" = api ]; then
+        shift
+        local jqexpr="" endpoint="" file
+        while [ $# -gt 0 ]; do
+          case "$1" in
+            --jq) jqexpr="$2"; shift ;;
+            -*) ;;
+            *) [ -n "$endpoint" ] || endpoint="$1" ;;
+          esac
+          shift
+        done
+        file="$RTMP/$(printf '%s' "$endpoint" | tr '/' '_').json"
+        [ -f "$file" ] || { printf '[]\n'; return 0; }
+        if [ -n "$jqexpr" ]; then jq -r "$jqexpr" "$file"; else cat "$file"; fi
+      elif [ "$1" = issue ] && [ "$2" = comment ]; then
+        local n="$3" body="" file
+        shift 3
+        while [ $# -gt 0 ]; do
+          case "$1" in --body) body="$2"; shift ;; esac
+          shift
+        done
+        printf '%s\n----\n' "$body" >>"$RTMP/posted-$n"
+        file="$RTMP/repos_owner_repo_issues_${n}_comments.json"
+        [ -f "$file" ] || printf '[]\n' >"$file"
+        jq --arg b "$body" --arg at "$(iso_at "$RNOW")" \
+          '. + [{"user":{"login":"sweep-bot"},"created_at":$at,"html_url":"https://x/posted","body":$b}]' \
+          "$file" >"$file.tmp" && mv "$file.tmp" "$file"
+      elif [ "$1" = issue ] && [ "$2" = edit ]; then
+        printf '%s\n' "$*" >>"$RTMP/edits"
+      fi
+    }
+    reconcile_pr 77 2>&1
+  )
+}
+
+# The flag went up 8 days ago with its escalation posted seconds earlier.
+jq -n --arg at "$(iso_at $((RNOW - 8 * 86400)))" \
+  '[{"event":"labeled","label":{"name":"needs-ruling"},"actor":{"login":"setter"},"created_at":$at}]' \
+  >"$RTMP/repos_owner_repo_issues_77_timeline.json"
+jq -n --arg at "$(iso_at $((RNOW - 8 * 86400 - 60)))" \
+  '[{"user":{"login":"setter"},"created_at":$at,"html_url":"https://x/esc77","body":"question, options, recommendation"}]' \
+  >"$RTMP/repos_owner_repo_issues_77_comments.json"
+
+wired="$(ruling_sweep_probe "needs-ruling")"
+expect "8 quiet days under a ruling nudges on the PR surface" \
+  yes "$(grep -q 'ruling nudge' <<<"$wired" && echo yes || echo no)"
+expect "...while the quiet stays stale-free (#51's skip intact)" \
+  no "$(grep -q 'stale (' <<<"$wired" && echo yes || echo no)"
+expect "...the accompanied flag is not called bare" \
+  no "$(grep -q 'ruling flag is bare' <<<"$wired" && echo yes || echo no)"
+expect "the nudge addressed the decider and linked the escalation" \
+  yes "$(grep -qF '@danmt' "$RTMP/posted-77" && grep -qF 'https://x/esc77' "$RTMP/posted-77" && echo yes || echo no)"
+again="$(ruling_sweep_probe "needs-ruling")"
+expect "the sweep right after the nudge holds its silence — the comment reset the window" \
+  no "$(grep -q 'ruling nudge' <<<"$again" && echo yes || echo no)"
+expect "exactly one nudge across both sweeps" \
+  1 "$(grep -c '^----$' "$RTMP/posted-77")"
+expect "no label edit across both sweeps names the ruling flag" \
+  no "$(grep -q 'needs-ruling' "$RTMP/edits" 2>/dev/null && echo yes || echo no)"
+
 printf 'labels-reconcile tests: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

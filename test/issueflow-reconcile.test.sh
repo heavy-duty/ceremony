@@ -149,4 +149,133 @@ check "completed epic is nudged" 0 "NUDGE" epic_decision "$epic_refs" $'CLOSED\n
 check "open epic child suppresses nudge" 0 "KEEP" epic_decision "$epic_refs" $'CLOSED\nOPEN'
 check "epic without parseable children is stable" 0 "KEEP" epic_decision "" ""
 
+# Invariant 1 keeps ignoring the ruling flag (#50 D8): it composes with the
+# queue labels and is not one of them.
+check "claimed plus a pending ruling is a healthy issue" 0 "KEEP" \
+  queue_decision <<< $'claimed\nneeds-ruling'
+check "a ruling flag alone is still invariant 1's violation" 0 "ADD_NEEDS_TRIAGE" \
+  queue_decision <<< $'needs-ruling'
+
+# ---------------------------------------------------------------------------
+# The ruling pass on the issue surface (#52), against a recording stub: the
+# reclaim clock stops under a pending ruling, an applied stale heals off,
+# label churn is not activity, the nudge resets on its own comment, and no
+# edit anywhere names the flag (#50 D9). The stub serves fixture JSON per
+# endpoint with the caller's --jq applied by real jq, appends posted comments
+# back into the fixture (a second sweep sees the first one's writes), and
+# records every label edit.
+# ---------------------------------------------------------------------------
+INOW=2000000000
+iso_at() { date -u -d "@$1" +%Y-%m-%dT%H:%M:%SZ; }
+
+issue_stub_gh() {
+  if [ "$1" = api ]; then
+    shift
+    local jqexpr="" endpoint="" file
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --jq) jqexpr="$2"; shift ;;
+        -*) ;;
+        *) [ -n "$endpoint" ] || endpoint="$1" ;;
+      esac
+      shift
+    done
+    file="$TMP/$(printf '%s' "$endpoint" | tr '/' '_').json"
+    [ -f "$file" ] || { printf '[]\n'; return 0; }
+    if [ -n "$jqexpr" ]; then jq -r "$jqexpr" "$file"; else cat "$file"; fi
+  elif [ "$1" = issue ] && [ "$2" = comment ]; then
+    local n="$3" body="" file
+    shift 3
+    while [ $# -gt 0 ]; do
+      case "$1" in --body) body="$2"; shift ;; esac
+      shift
+    done
+    printf '%s\n----\n' "$body" >>"$TMP/posted-$n"
+    file="$TMP/repos_owner_repo_issues_${n}_comments.json"
+    [ -f "$file" ] || printf '[]\n' >"$file"
+    jq --arg b "$body" --arg at "$(iso_at "$INOW")" \
+      '. + [{"user":{"login":"sweep-bot"},"created_at":$at,"html_url":"https://x/posted","body":$b}]' \
+      "$file" >"$file.tmp" && mv "$file.tmp" "$file"
+  elif [ "$1" = issue ] && [ "$2" = edit ]; then
+    printf '%s\n' "$*" >>"$TMP/issue-edits"
+  fi
+}
+
+issue_probe() { # $1 = issue number, $2 = labels → reconcile_issue's log lines
+  (
+    REPO=owner/repo NOW="$INOW"
+    ISSUE_LABELS="$2"
+    ISSUE_JSON="$(jq -n --arg at "$(iso_at $((INOW - 10 * 86400)))" \
+      '{created_at: $at, assignees: [{login: "owner-bot"}], body: ""}')"
+    OPEN_PR_ISSUES=""
+    run() { "$@"; }
+    gh() { issue_stub_gh "$@"; }
+    reconcile_issue "$1" 2>&1
+  )
+}
+
+tfix() { printf '%s/repos_owner_repo_issues_%s_timeline.json' "$TMP" "$1"; }
+cfix() { printf '%s/repos_owner_repo_issues_%s_comments.json' "$TMP" "$1"; }
+
+# -- the reclaim clock stops under a pending ruling (48h quiet, no PR) -------
+jq -n --arg l "$(iso_at $((INOW - 10 * 86400)))" \
+  '[{"event":"labeled","label":{"name":"needs-ruling"},"actor":{"login":"setter"},"created_at":$l},
+    {"event":"assigned","created_at":$l}]' >"$(tfix 21)"
+jq -n --arg at "$(iso_at $((INOW - 10 * 86400 - 60)))" \
+  '[{"user":{"login":"setter"},"created_at":$at,"html_url":"https://x/esc21","body":"question, options, recommendation"}]' \
+  >"$(cfix 21)"
+exempt="$(issue_probe 21 $'claimed\nneeds-ruling')"
+check "a 10-day-quiet claim under a ruling is not reclaimed" 1 "" \
+  grep -q 'reclaimed' <<<"$exempt"
+check "...the same silence still nudges the pending ruling" 0 "" \
+  grep -q 'ruling nudge' <<<"$exempt"
+# shellcheck disable=SC2016 # expansions belong to the isolated bash -c process
+check "...and the nudge went to the decider with the escalation linked" 0 "" \
+  bash -c 'grep -qF "@danmt" "$1" && grep -qF "https://x/esc21" "$1"' _ "$TMP/posted-21"
+again="$(issue_probe 21 $'claimed\nneeds-ruling')"
+check "the sweep right after the nudge holds its silence" 1 "" \
+  grep -q 'ruling nudge' <<<"$again"
+check "exactly one nudge across both sweeps" 0 "1" \
+  grep -c -- '^----$' "$TMP/posted-21"
+
+# -- control: the same silence without the flag is reclaimed -----------------
+jq -n --arg l "$(iso_at $((INOW - 10 * 86400)))" \
+  '[{"event":"assigned","created_at":$l}]' >"$(tfix 22)"
+printf '[]\n' >"$(cfix 22)"
+control="$(issue_probe 22 claimed)"
+check "the flag-free control is reclaimed (the clock still runs elsewhere)" 0 "" \
+  grep -q 'stale claim reclaimed -> ready' <<<"$control"
+
+# -- an already-applied stale heals off, and no edit names the flag ----------
+jq -n --arg l "$(iso_at $((INOW - 3600)))" \
+  '[{"event":"labeled","label":{"name":"needs-ruling"},"actor":{"login":"setter"},"created_at":$l}]' >"$(tfix 23)"
+jq -n --arg at "$(iso_at $((INOW - 3660)))" \
+  '[{"user":{"login":"setter"},"created_at":$at,"html_url":"https://x/esc23","body":"question, options, recommendation"}]' \
+  >"$(cfix 23)"
+healed="$(issue_probe 23 $'claimed\nneeds-ruling\nstale')"
+check "an applied stale comes off under a pending ruling" 0 "" \
+  grep -q 'unstale (a ruling is pending)' <<<"$healed"
+check "...via an edit that removes exactly stale" 0 "" \
+  grep -q -- '--remove-label stale' "$TMP/issue-edits"
+check "no issue edit across every probe names the ruling flag (#50 D9)" 1 "" \
+  grep -q 'needs-ruling' "$TMP/issue-edits"
+
+# -- label churn is not activity: the nudge clock reads comments, not labels --
+jq -n --arg flag "$(iso_at $((INOW - 8 * 86400)))" \
+  --arg churn "$(iso_at $((INOW - 2 * 86400)))" \
+  --arg assigned "$(iso_at $((INOW - 9 * 86400)))" \
+  '[{"event":"labeled","label":{"name":"needs-ruling"},"actor":{"login":"setter"},"created_at":$flag},
+    {"event":"labeled","label":{"name":"priority"},"actor":{"login":"anyone"},"created_at":$churn},
+    {"event":"assigned","created_at":$assigned}]' >"$(tfix 24)"
+jq -n --arg at "$(iso_at $((INOW - 8 * 86400 - 60)))" \
+  '[{"user":{"login":"setter"},"created_at":$at,"html_url":"https://x/esc24","body":"question, options, recommendation"}]' \
+  >"$(cfix 24)"
+churn_last="$( (REPO=owner/repo; gh() { issue_stub_gh "$@"; }
+  last_issue_activity 24 "$(iso_at $((INOW - 10 * 86400)))") )"
+check "last activity ignores the 2-day-old label churn" 0 "" \
+  test "$churn_last" = "$((INOW - 8 * 86400 - 60))"
+churned="$(issue_probe 24 $'claimed\nneeds-ruling')"
+check "8 real-quiet days nudge through a 2-day-old label churn" 0 "" \
+  grep -q 'ruling nudge' <<<"$churned"
+
 summary
