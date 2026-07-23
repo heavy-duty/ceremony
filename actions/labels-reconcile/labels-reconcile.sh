@@ -40,6 +40,11 @@ BOTS=()
 REQUIRED_BOTS=()
 STATES=(state:building state:bots-reviewing state:addressing state:needs-human)
 BLOCKERS=(blocker:conflict blocker:ci-red blocker:unrequested)
+# The PR's current labels, set per PR by the sweep. Initialized here because
+# the script runs under `set -u` even when sourced, and the pure-function
+# fixtures call decide_state — which now reads has_label — without ever
+# setting it (#51). An empty default keeps has_label honest for every caller.
+LABELS=""
 # Labels this machine used to own and no longer does. Cleared on sight so a
 # retirement heals the board instead of stranding a label nothing recomputes.
 RETIRED=(state:needs-rebase)
@@ -111,13 +116,14 @@ set_required_bots() { # the PR author is recused by construction
 }
 
 # ---------------------------------------------------------------------------
-# The state machine. Pure functions over four globals, set per PR:
+# The state machine. Pure functions over these globals, set per PR:
 #   DRAFT        true|false
 #   HEAD_SHA     the PR's current head commit
 #   REQUESTED    newline-separated logins with a review currently requested
 #   REVIEWS_JSON JSON array of submitted (non-PENDING) reviews
 #   MERGEABLE    MERGEABLE | CONFLICTING | UNKNOWN  (GitHub's own verdict)
 #   CHECKS       SUCCESS | FAILURE | PENDING | NONE (the check rollup)
+#   LABELS       newline-separated labels currently on the PR
 # ---------------------------------------------------------------------------
 
 requested() { grep -qxF "$1" <<<"$REQUESTED"; }
@@ -290,6 +296,20 @@ decide_state() { # → the one state:* label this PR should carry
   if [ "$s" = state:needs-human ] && [ -n "$(blockers)" ]; then
     echo state:addressing; return
   fi
+
+  # A pending ruling disqualifies needs-human the same way (#51): while
+  # `needs-ruling` is up, the human's turn lives in the THREAD — the flag
+  # marks it — and "mergeable right now" must not read true beside an open
+  # decision. state:addressing is the honest landing because the ball ON THE
+  # PR is the builder's: the flag-setter judges when agreement is reached and
+  # carries the ruling in (#50 D6). The label is deliberately NOT in BLOCKERS:
+  # that array is machine-owned, and the converge loop strips every entry the
+  # current facts do not re-derive — `needs-ruling` is hand-set intent the
+  # machine reads and never writes (#50 D9), so parking it there would strip
+  # a live escalation on the next 15-minute tick.
+  if [ "$s" = state:needs-human ] && has_label needs-ruling; then
+    echo state:addressing; return
+  fi
   echo "$s"
 }
 
@@ -366,6 +386,7 @@ blocker:unrequested|E99695|Somebody still owes a verdict and nobody was asked fo
 merge-next|0E8A16|Head of the merge queue — merge this one next (set by hand/agent, cleared here)
 stale|B60205|No activity for 48h — needs a poke (sweep-managed)
 blocked|6A737D|Waiting on another PR or issue to land first
+needs-ruling|D4C5F9|A human decision is pending — question, options and a recommendation are in the comment
 release|0E8A16|Release flow and version/packaging work
 needs-triage|FBCA04|Did not come through triage — owes normalization or conversion to a discussion
 ready|0E8A16|Triaged, spec complete, unblocked — a builder can start now and succeed
@@ -496,7 +517,9 @@ reconcile_pr() { # $1 = PR number; relies on the globals set from its fetch
     } | sort | tail -n1
   )"
   age=$((NOW - $(date -d "$last_activity" +%s)))
-  if has_label blocked || [ "$age" -le "$STALE_AFTER" ]; then
+  # needs-ruling joins blocked here: waiting on a human is legitimately quiet
+  # (#50 D10). The 7-day nudge is #52's, once for both surfaces.
+  if has_label blocked || has_label needs-ruling || [ "$age" -le "$STALE_AFTER" ]; then
     if has_label stale; then
       run gh issue edit "$n" -R "$REPO" --remove-label stale >/dev/null
       log "#$n: unstale"
