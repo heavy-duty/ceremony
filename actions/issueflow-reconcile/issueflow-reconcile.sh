@@ -9,7 +9,18 @@ fi
 # The issue-flow half of the labels state machine. Decisions are pure strings;
 # API calls live below the divider so fixture tests can exercise every branch.
 
-STALE_AFTER=$((48 * 3600))
+ISSUEFLOW_NOW="${ISSUEFLOW_NOW:-$(date -u +%s)}"
+ISSUEFLOW_STALE_HOURS="${ISSUEFLOW_STALE_HOURS:-48}"
+[[ "$ISSUEFLOW_NOW" =~ ^[0-9]+$ ]] || {
+  echo "issueflow: ISSUEFLOW_NOW must be UTC epoch seconds" >&2
+  if [ "${BASH_SOURCE[0]}" = "$0" ]; then exit 1; else return 1; fi
+}
+[[ "$ISSUEFLOW_STALE_HOURS" =~ ^[0-9]+$ ]] || {
+  echo "issueflow: ISSUEFLOW_STALE_HOURS must be a non-negative integer" >&2
+  if [ "${BASH_SOURCE[0]}" = "$0" ]; then exit 1; else return 1; fi
+}
+NOW="$ISSUEFLOW_NOW"
+STALE_AFTER=$((ISSUEFLOW_STALE_HOURS * 3600))
 QUEUE_LABELS=(ready claimed blocked)
 TRIAGE_ACTORS=()
 
@@ -232,7 +243,6 @@ main() {
   REPO="${REPO:?set REPO to owner/name}"
   LABELS_CONF="${LABELS_CONF:-.github/labels.conf}"
   load_issueflow_config "$LABELS_CONF"
-  NOW="$(date +%s)"
   if [ "${EVENT_NAME:-}" = issues ] && [ "${EVENT_ACTION:-}" = opened ]; then
     reconcile_opened_issue "${EVENT_ISSUE:?set EVENT_ISSUE for issues:opened}"
   fi
