@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
-# lib/ruling.sh — the `needs-ruling` sweep invariants (issue #52, epic #50).
+# lib/ruling.sh — the `needs-ruling` sweep invariants (issues #52 and #73,
+# epic #50).
 #
-# Both reconcilers source this file: the bare-flag check and the 7-day nudge
-# are ONE implementation serving both surfaces — two copies of a 7-day rule
-# is how the family got here in the first place (#50). Pure decisions sit
-# above the divider (facts in, verdict out); the one impure orchestrator
-# below talks to gh and posts through the sourcing script's run()/log().
+# Both reconcilers source this file: the bare-flag check, the escalation
+# shape check, the ladder's rung comments and the 7-day nudge are ONE
+# implementation serving both surfaces — two copies of a 7-day rule is how
+# the family got here in the first place (#50). Pure decisions sit above
+# the divider (facts in, verdict out); the one impure orchestrator below
+# talks to gh and posts through the sourcing script's run()/log().
 #
 # Standing rules this file lives under:
 #   - The machine never sets or clears `needs-ruling` (#50 D9). Nothing here
@@ -30,9 +32,22 @@ RULING_NUDGE_AFTER=$((7 * 24 * 3600))
 # The escalation back-window: a comment this many seconds before the
 # `labeled` event still accompanies it.
 RULING_BARE_WINDOW=$((15 * 60))
-# The idempotency marker for the bare-flag comment. The nudge deliberately
+# The ladder's rungs (#50 D13, via #72's doctrine): moments past the current
+# episode's `labeled` event. Two timers only — the 24h rung's comment names
+# triage's past-24h authority too, so there is no third timer to keep honest.
+RULING_RUNG12_AT=$((12 * 3600))
+RULING_RUNG24_AT=$((24 * 3600))
+# The escalation contract's four field labels (#50 D12). Literal strings —
+# the template in BUILDER.md ("the ruling ask") fixes them so this machinery
+# can check for them; presence is all that is ever checked (#50 D4).
+RULING_SHAPE_FIELDS=(Options: Recommend: Blocked: Default:)
+# The idempotency markers, one per comment kind, each scoped to the current
+# `labeled` episode by ruling_bare_comment_needed. The nudge deliberately
 # has NO marker — see ruling_nudge_decision.
 RULING_BARE_MARKER='<!-- ceremony:needs-ruling-bare -->'
+RULING_SHAPE_MARKER='<!-- ceremony:needs-ruling-shape -->'
+RULING_RUNG12_MARKER='<!-- ceremony:needs-ruling-rung12 -->'
+RULING_RUNG24_MARKER='<!-- ceremony:needs-ruling-rung24 -->'
 
 # ---------------------------------------------------------------------------
 # Pure decisions. Facts in (args/stdin), verdict out. No gh, no clock.
@@ -74,11 +89,66 @@ ruling_bare_comment_needed() { # $1 labeled epoch, $2 newest marked-comment epoc
   # → POST | SKIP. Scoped to the CURRENT labeled event: a marked comment
   # older than the event belongs to an earlier flag episode, so a genuine
   # re-flag is re-checked while a 15-minute cron never repeats itself.
+  # Marker-agnostic — the caller tracks a newest epoch PER marker (#73), so
+  # this one comparison scopes every marked write (bare, shape, both rungs).
   local labeled="$1" marked="${2:-}"
   if [ -n "$marked" ] && [ "$marked" -gt "$labeled" ]; then
     echo SKIP
   else
     echo POST
+  fi
+}
+
+ruling_shape_decision() { # escalation body on stdin → SHAPED | MALFORMED <missing labels>
+  # Presence only (#50 D4): that `Recommend:` exists is checkable, that the
+  # recommendation is any good is not — no counting options, no parsing the
+  # prose. Line-anchored, allowing leading whitespace and Markdown bold
+  # (`**Options:**` is how the live escalations write them): the labels
+  # appearing only mid-sentence is not the template. The `🧭 needs-ruling`
+  # header line is deliberately unchecked — it is prose, and an emoji grep
+  # on an LC_ALL=C runner is a portability trap for zero enforcement value.
+  local body field missing=""
+  body="$(cat)"
+  for field in "${RULING_SHAPE_FIELDS[@]}"; do
+    grep -Eq "^[[:space:]]*(\*\*)?$field" <<<"$body" || missing="$missing $field"
+  done
+  if [ -z "$missing" ]; then echo SHAPED; else echo "MALFORMED$missing"; fi
+}
+
+ruling_deadline_decision() { # $1 now, $2 the current episode's labeled epoch → RUNG0 | RUNG12 | RUNG24
+  # The ladder anchors to the `labeled` event, never to activity (#50 D14:
+  # an active back-and-forth still climbs it; only the separate 7-day nudge
+  # resets). "At 12h" means AT: the boundary starts the rung — the rung is a
+  # moment whose duty exists the moment it strikes, unlike the strictly-past
+  # nudge horizon. RUNG24 covers "past 24h" too: the 24h comment names both
+  # the builder's rung and triage's past-24h authority, so there is no
+  # fourth timer to keep honest.
+  local age=$(($1 - $2))
+  if [ "$age" -ge "$RULING_RUNG24_AT" ]; then
+    echo RUNG24
+  elif [ "$age" -ge "$RULING_RUNG12_AT" ]; then
+    echo RUNG12
+  else
+    echo RUNG0
+  fi
+}
+
+ruling_default_decision() { # escalation body on stdin → DEADLINE <ts> | HARDBLOCK | UNPARSEABLE
+  # Parsed only to *describe* the item in the rung comments, never to gate a
+  # rung (#50 D14: the rungs apply whatever `Default:` says). Mechanical or
+  # nothing: an ISO-8601 UTC timestamp anywhere on the `Default:` line is
+  # the deadline, the literal word `none` is a hard block, anything else is
+  # reported as unparseable rather than guessed at. Only the `Default:` line
+  # is read — a timestamp elsewhere in the body is somebody's prose.
+  local line ts
+  line="$(grep -E '^[[:space:]]*(\*\*)?Default:' | head -n1)"
+  ts="$(grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?Z' <<<"$line" | head -n1)"
+  if [ -n "$ts" ]; then
+    echo "DEADLINE $ts"
+  elif grep -qE '(^|[^[:alnum:]])none([^[:alnum:]]|$)' <<<"$line"; then
+    echo HARDBLOCK
+  else
+    echo UNPARSEABLE
   fi
 }
 
@@ -99,21 +169,29 @@ ruling_newest_flag() { # "login<TAB>iso8601" lines on stdin → the newest line
   sort -t $'\t' -k2 | tail -n1
 }
 
-ruling_escalation_url() { # $1 setter, $2 labeled epoch; "login epoch url" lines on stdin
-  # → the url of the EARLIEST in-window comment by the setter, or nothing.
+ruling_escalation_row() { # $1 setter, $2 labeled epoch; "login epoch url [b64]" lines on stdin
+  # → "url b64" of the EARLIEST in-window comment by the setter, or nothing.
   # Earliest, because the natural shape is escalation-then-flag: the first
   # qualifying comment is the escalation itself, later ones are follow-ups.
-  local setter="$1" labeled="$2" login epoch url best_epoch="" best_url=""
-  while read -r login epoch url; do
+  # The body rides along base64-encoded (#73's shape check reads it); rows
+  # without the column still resolve, with an empty body.
+  local setter="$1" labeled="$2" login epoch url b64 best_epoch="" best=""
+  while read -r login epoch url b64; do
     [ -n "$login" ] || continue
     [ "$login" = "$setter" ] || continue
     ruling_accompanies "$epoch" "$labeled" || continue
     if [ -z "$best_epoch" ] || [ "$epoch" -lt "$best_epoch" ]; then
       best_epoch="$epoch"
-      best_url="$url"
+      best="$url ${b64:-}"
     fi
   done
-  [ -z "$best_url" ] || printf '%s\n' "$best_url"
+  [ -z "$best" ] || printf '%s\n' "$best"
+}
+
+ruling_escalation_url() { # same contract, url column only — the nudge's link
+  local row
+  row="$(ruling_escalation_row "$@")"
+  [ -z "$row" ] || printf '%s\n' "${row%% *}"
 }
 
 # ---------------------------------------------------------------------------
@@ -148,33 +226,49 @@ reconcile_ruling() { # $1 item number, $2 last real-activity epoch, $3 now
   labeled_at="${newest##*$'\t'}"
   labeled_epoch="$(date -d "$labeled_at" +%s)"
 
+  # The body travels as jq's @base64 — bodies carry newlines and tabs, and
+  # the whole file is line-oriented, so the row format stays TSV and the
+  # body is decoded at its points of use (#73). Do not switch rows to JSON.
   local comments
   if ! comments="$(gh api --paginate "repos/$REPO/issues/$n/comments" \
     --jq '.[] | [.user.login, .created_at, .html_url,
-          (if ((.body // "") | contains("<!-- ceremony:needs-ruling-bare -->"))
-           then "marked" else "plain" end)] | @tsv' 2>/dev/null)"; then
+          ((.body // "") | @base64)] | @tsv' 2>/dev/null)"; then
     log "#$n: ruling comments unreadable — no verdict invented this pass"
     return 0
   fi
 
-  # One pass over the comments builds every fact the decisions consume:
-  # who commented when (for the bare verdict), the newest marked comment
-  # (for idempotency), and the "login epoch url" rows the link lookup reads.
-  local login at url kind epoch authored="" rows="" marked=""
-  while IFS=$'\t' read -r login at url kind; do
+  # One pass over the comments builds every fact the decisions consume: who
+  # commented when (for the bare verdict), the newest marked comment PER
+  # MARKER (each write is idempotent per episode — one pass, not one pass
+  # per marker), and the "login epoch url b64" rows the escalation lookup
+  # reads. A body that fails to decode counts as unmarked — for idempotency
+  # that risks a repeat, never an invented verdict.
+  local login at url b64 body epoch authored="" rows=""
+  local marked_bare="" marked_shape="" marked_rung12="" marked_rung24=""
+  while IFS=$'\t' read -r login at url b64; do
     [ -n "$login" ] || continue
     epoch="$(date -d "$at" +%s)"
     authored="$authored$login $epoch"$'\n'
-    rows="$rows$login $epoch $url"$'\n'
-    if [ "$kind" = marked ]; then
-      if [ -z "$marked" ] || [ "$epoch" -gt "$marked" ]; then marked="$epoch"; fi
-    fi
+    rows="$rows$login $epoch $url ${b64:-}"$'\n'
+    body="$(base64 -d <<<"${b64:-}" 2>/dev/null)" || body=""
+    case "$body" in *"$RULING_BARE_MARKER"*)
+      if [ -z "$marked_bare" ] || [ "$epoch" -gt "$marked_bare" ]; then marked_bare="$epoch"; fi ;;
+    esac
+    case "$body" in *"$RULING_SHAPE_MARKER"*)
+      if [ -z "$marked_shape" ] || [ "$epoch" -gt "$marked_shape" ]; then marked_shape="$epoch"; fi ;;
+    esac
+    case "$body" in *"$RULING_RUNG12_MARKER"*)
+      if [ -z "$marked_rung12" ] || [ "$epoch" -gt "$marked_rung12" ]; then marked_rung12="$epoch"; fi ;;
+    esac
+    case "$body" in *"$RULING_RUNG24_MARKER"*)
+      if [ -z "$marked_rung24" ] || [ "$epoch" -gt "$marked_rung24" ]; then marked_rung24="$epoch"; fi ;;
+    esac
   done <<<"$comments"
 
   # ---- the bare-flag check (#50 D4, mechanical proxy) ----
-  if [ "$(ruling_bare_decision "$setter" "$labeled_epoch" <<<"$authored")" = BARE ] \
-    && [ "$(ruling_bare_comment_needed "$labeled_epoch" "$marked")" = POST ]; then
-    run gh issue comment "$n" -R "$REPO" --body "$RULING_BARE_MARKER
+  if [ "$(ruling_bare_decision "$setter" "$labeled_epoch" <<<"$authored")" = BARE ]; then
+    if [ "$(ruling_bare_comment_needed "$labeled_epoch" "$marked_bare")" = POST ]; then
+      run gh issue comment "$n" -R "$REPO" --body "$RULING_BARE_MARKER
 The ruling flag on this item was set by @$setter with no accompanying
 escalation comment. Setting it requires the escalation contract — the
 **question**, the **options**, and a **recommendation** — posted by the
@@ -183,7 +277,88 @@ after ([LABELS.md](https://github.com/heavy-duty/ceremony/blob/main/LABELS.md)
 carries the flag-setter's obligations; heavy-duty/ceremony#50 D4). The label stays — this machine never removes an
 escalation on the strength of a timestamp heuristic — but the contract is
 still owed." >/dev/null
-    log "#$n: ruling flag is bare — commented (the label is never removed)"
+      log "#$n: ruling flag is bare — commented (the label is never removed)"
+    fi
+    # Bare stops here (#73): there is no shape to check when there is no
+    # escalation comment, and a rung comment beside the bare comment would be
+    # two comments about the same omission — noise. The 7-day nudge below is
+    # deliberately untouched by this exclusion; it predates the ladder and
+    # already words the bare case itself.
+  else
+    # ---- the shape check (#50 D12): the contract's four field labels ----
+    local esc_row esc_url esc_body shape
+    esc_row="$(ruling_escalation_row "$setter" "$labeled_epoch" <<<"$rows")"
+    esc_url="${esc_row%% *}"
+    if ! esc_body="$(base64 -d <<<"${esc_row#* }" 2>/dev/null)"; then
+      # An undecodable body must not become "malformed" — an unreadable fact
+      # never invents a verdict. The rungs read the same body, so they wait
+      # for a readable pass too.
+      log "#$n: escalation body unreadable — no verdict invented this pass"
+    else
+      shape="$(ruling_shape_decision <<<"$esc_body")"
+      if [ "$shape" != SHAPED ] \
+        && [ "$(ruling_bare_comment_needed "$labeled_epoch" "$marked_shape")" = POST ]; then
+        local missing="${shape#MALFORMED }"
+        run gh issue comment "$n" -R "$REPO" --body "$RULING_SHAPE_MARKER
+@$setter — the [escalation comment]($esc_url) accompanying this ruling flag
+is missing required field labels: **$missing**. The contract's shape is
+fixed because this machinery checks for it (heavy-duty/ceremony#50 D12):
+four line-anchored field labels — \`Options:\`, \`Recommend:\`, \`Blocked:\`,
+\`Default:\` — per the canonical template in
+[BUILDER.md — the ruling ask](https://github.com/heavy-duty/ceremony/blob/main/BUILDER.md#the-ruling-ask).
+Presence is all that is checked; the machine never judges the prose
+(heavy-duty/ceremony#50 D4). The label stays — the shape is owed, not
+enforced." >/dev/null
+        log "#$n: escalation malformed (missing:$missing) — commented (the shape is owed, not enforced)"
+      fi
+
+      # ---- the ladder's rungs (#50 D13–D14), observed never decided ----
+      # Each rung's comment fires once per episode, AT its moment: a rung
+      # whose moment passed unobserved (the sweep was down through 12h–24h)
+      # is not paged after the fact — the later rung's comment carries the
+      # whole remaining duty.
+      local rung state described
+      rung="$(ruling_deadline_decision "$now" "$labeled_epoch")"
+      state="$(ruling_default_decision <<<"$esc_body")"
+      case "$state" in
+        DEADLINE\ *) described="a stated default deadline of \`${state#DEADLINE }\`" ;;
+        HARDBLOCK)   described="\`Default: none\` — a hard block; no default ever fires" ;;
+        *)           described="a missing or unparseable \`Default:\` line — reported as-is, never guessed at (and the contract's own rule is that unsure is a hard block)" ;;
+      esac
+      if [ "$rung" = RUNG12 ] \
+        && [ "$(ruling_bare_comment_needed "$labeled_epoch" "$marked_rung12")" = POST ]; then
+        run gh issue comment "$n" -R "$REPO" --body "$RULING_RUNG12_MARKER
+@$setter — this ruling is 12 hours past its \`labeled\` event: the ladder's
+12h rung ([BUILDER.md — the ruling ask](https://github.com/heavy-duty/ceremony/blob/main/BUILDER.md#the-ruling-ask),
+heavy-duty/ceremony#50 D13). Mechanically read, the escalation carries
+$described.
+
+The rung's duty is the flag-setter's: re-read the \`Default:\` against
+everything that has landed since the flag went up — does it still hold, and
+has reasonable doubt appeared? A stale default does not fire, and new doubt
+makes it a hard block. The rungs run on the \`labeled\` clock and do not
+reset on activity; this comment fires once per flag episode." >/dev/null
+        log "#$n: ruling at the 12h rung — commented (the setter re-reads the default)"
+      fi
+      if [ "$rung" = RUNG24 ] \
+        && [ "$(ruling_bare_comment_needed "$labeled_epoch" "$marked_rung24")" = POST ]; then
+        run gh issue comment "$n" -R "$REPO" --body "$RULING_RUNG24_MARKER
+@$setter — this ruling is 24 hours past its \`labeled\` event: the ladder's
+24h rung ([BUILDER.md — the ruling ask](https://github.com/heavy-duty/ceremony/blob/main/BUILDER.md#the-ruling-ask),
+heavy-duty/ceremony#50 D13). Mechanically read, the escalation carries
+$described.
+
+At 24h the builder proceeds regardless, **as a PR**: pick an option and
+state in the PR body which way you went and what doubt remains. Nothing
+merges by this — the human still gates the merge. Past 24h the choice is
+triage's to make: triage picks the option, records it as a decision, and
+remains accountable; the operator may overturn it at merge. The rungs run on
+the \`labeled\` clock and do not reset on activity; this comment fires once
+per flag episode and covers everything past 24h — there is no further
+timer." >/dev/null
+        log "#$n: ruling at the 24h rung — commented (the builder proceeds as a PR; past 24h is triage's)"
+      fi
+    fi
   fi
 
   # ---- the 7-day nudge (#50 D10) ----

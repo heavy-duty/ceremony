@@ -14,6 +14,7 @@ so entries say what changed, cite the issue, and stop.
 - `offsite` — protect claimed issues whose PR lives in another repository from the claim-reclaim clock (#68).
 - `issueflow-reconcile` — nudge once when an `offsite` flag outlives every visible cross-referenced PR (#69).
 - Ruling doctrine — define every human-owned trigger, the fixed escalation shape, and the 0–24h builder-to-triage ladder (#72).
+- The sweep observes the escalation contract: a malformed escalation is named field-by-field, and the ladder's 12h/24h rungs each draw one comment to the flag-setter — comment-only, per-episode, both surfaces (#73).
 
 ## 0.1.0 — 2026-07-22
 
