@@ -62,7 +62,7 @@ Each demand gets **exactly one session, and the ack bounds it**: the
 session's first act, before any of the demanded work, is the pickup comment
 plus removing the label — [the `attention`
 contract's](https://github.com/heavy-duty/ceremony/blob/bce09aa7648dbd74b8e91b1d4fbc2fa8d145f705/LABELS.md#L143-L149)
-ack, made here concretely the ack-then-act ordering of the session (#85).
+ack (#85), which here becomes the session's ack-then-act ordering.
 Then it acts on the thread and exits — short by construction. Until the label
 is removed the flag is still up, so a session that dies before acking is
 simply relaunched at the next tick; that is the whole crash-recovery story,
