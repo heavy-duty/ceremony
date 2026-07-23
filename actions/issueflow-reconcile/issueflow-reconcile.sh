@@ -24,6 +24,10 @@ STALE_AFTER=$((ISSUEFLOW_STALE_HOURS * 3600))
 QUEUE_LABELS=(ready claimed blocked)
 TRIAGE_ACTORS=()
 
+# The needs-ruling invariants (#52) — one implementation for both surfaces.
+# shellcheck source=lib/ruling.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../../lib/ruling.sh"
+
 log() { printf 'issueflow: %s\n' "$*"; }
 run() { if [ -n "${DRY_RUN:-}" ]; then log "DRY_RUN: $*"; else "$@"; fi; }
 
@@ -225,7 +229,16 @@ reconcile_issue() {
     assignees="$(jq '.assignees | length' <<<"$ISSUE_JSON")"
     grep -qxF "$n" <<<"${OPEN_PR_ISSUES:-}" && open_pr=true
     age="$(last_issue_activity "$n" "$(jq -r '.created_at' <<<"$ISSUE_JSON")")"
-    decision="$(claim_decision_at "$assignees" "$open_pr" "$age")"
+    if [ "$(ruling_stale_exempt <<<"$ISSUE_LABELS")" = EXEMPT ]; then
+      # Waiting on a human is legitimately quiet (#50 D10): the reclaim
+      # clock does not run under a pending ruling — the same treatment
+      # `blocked` gets by never reaching this branch at all. Only the clock
+      # stops: an unassigned claim is still a repair the decision must see,
+      # so it runs on a zero age rather than being skipped.
+      decision="$(claim_decision "$assignees" "$open_pr" 0)"
+    else
+      decision="$(claim_decision_at "$assignees" "$open_pr" "$age")"
+    fi
     case "$decision" in
       FLAG_UNASSIGNED)
         ensure_comment "$n" claimed-unassigned \
@@ -271,6 +284,23 @@ reconcile_issue() {
         "Every issue referenced by this epic's task list is closed. Please close the epic or extend its task list."
       log "#$n: completed epic nudged"
     fi
+  fi
+
+  # ---- the ruling invariants (#52), on any queue state ----
+  # The flag composes with the queue labels (#50 D8), so this runs after the
+  # queue branches rather than inside one of them. The FLAG_CONFLICT return
+  # above still short-circuits it on purpose: a board lying about its queue
+  # state is repaired by triage before anything else is derived from it.
+  if has_issue_label needs-ruling; then
+    # An already-applied stale comes off: waiting on a human is legitimately
+    # quiet (#50 D10), and nothing on the issue side ever puts stale back.
+    if has_issue_label stale; then
+      run gh issue edit "$n" -R "$REPO" --remove-label stale >/dev/null
+      log "#$n: unstale (a ruling is pending)"
+    fi
+    [ -n "${age:-}" ] \
+      || age="$(last_issue_activity "$n" "$(jq -r '.created_at' <<<"$ISSUE_JSON")")"
+    reconcile_ruling "$n" "$age" "$NOW"
   fi
 }
 
