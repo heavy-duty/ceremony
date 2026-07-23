@@ -68,6 +68,14 @@ check "reclaim marker is stable within a claim episode" 0 "claim-reclaimed-96399
   claim_reclaim_marker 96399
 check "a later claim episode receives a new reclaim marker" 0 "claim-reclaimed-99999" \
   claim_reclaim_marker 99999
+check "offsite exempts the claim clock" 0 "EXEMPT" claim_clock_exempt <<<"offsite"
+check "needs-ruling still exempts through the shared gate" 0 "EXEMPT" \
+  claim_clock_exempt <<<"needs-ruling"
+check "both quiet flags still produce one exemption verdict" 0 "EXEMPT" \
+  claim_clock_exempt <<< $'offsite\nneeds-ruling'
+check "blocked does not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt <<<"blocked"
+check "ready does not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt <<<"ready"
+check "empty labels do not exempt a claimed issue" 0 "SWEEP" claim_clock_exempt </dev/null
 
 # Invariant 3: blocked declarations parse and release only when all close.
 refs="$(blocked_references <<< $'Context #99. Blocked by #12 (first), #7 (second). Blocks #44.')"
@@ -155,6 +163,10 @@ check "claimed plus a pending ruling is a healthy issue" 0 "KEEP" \
   queue_decision <<< $'claimed\nneeds-ruling'
 check "a ruling flag alone is still invariant 1's violation" 0 "ADD_NEEDS_TRIAGE" \
   queue_decision <<< $'needs-ruling'
+check "claimed plus offsite is a healthy issue" 0 "KEEP" \
+  queue_decision <<< $'claimed\noffsite'
+check "offsite alone still needs triage" 0 "ADD_NEEDS_TRIAGE" \
+  queue_decision <<<"offsite"
 
 # ---------------------------------------------------------------------------
 # The ruling pass on the issue surface (#52), against a recording stub: the
@@ -201,13 +213,16 @@ issue_stub_gh() {
   fi
 }
 
-issue_probe() { # $1 = issue number, $2 = labels → reconcile_issue's log lines
+issue_probe() { # $1 issue, $2 labels, $3 assignees (default 1), $4 open PR
   (
+    local assignees="${3:-1}" open_pr="${4:-false}" assignee_json='[]'
+    [ "$assignees" -eq 0 ] || assignee_json='[{"login":"owner-bot"}]'
     REPO=owner/repo NOW="$INOW"
     ISSUE_LABELS="$2"
     ISSUE_JSON="$(jq -n --arg at "$(iso_at $((INOW - 10 * 86400)))" \
-      '{created_at: $at, assignees: [{login: "owner-bot"}], body: ""}')"
-    OPEN_PR_ISSUES=""
+      --argjson assignees "$assignee_json" \
+      '{created_at: $at, assignees: $assignees, body: ""}')"
+    if [ "$open_pr" = true ]; then OPEN_PR_ISSUES="$1"; else OPEN_PR_ISSUES=""; fi
     run() { "$@"; }
     gh() { issue_stub_gh "$@"; }
     reconcile_issue "$1" 2>&1
@@ -245,6 +260,28 @@ printf '[]\n' >"$(cfix 22)"
 control="$(issue_probe 22 claimed)"
 check "the flag-free control is reclaimed (the clock still runs elsewhere)" 0 "" \
   grep -q 'stale claim reclaimed -> ready' <<<"$control"
+
+# -- offsite stops only the reclaim clock ------------------------------------
+offsite="$(issue_probe 25 $'claimed\noffsite')"
+check "a 10-day-quiet offsite claim is not reclaimed" 1 "" \
+  grep -q 'reclaimed' <<<"$offsite"
+offsite_unassigned="$(issue_probe 26 $'claimed\noffsite' 0)"
+check "an unassigned offsite claim is still flagged" 0 "" \
+  grep -q 'issueflow:claimed-unassigned' "$TMP/posted-26"
+offsite_open="$(issue_probe 27 $'claimed\noffsite' 1 true)"
+check "an offsite claim with an open PR stays claimed" 1 "" \
+  grep -q 'reclaimed' <<<"$offsite_open"
+offsite_both="$(issue_probe 28 $'claimed\noffsite\nneeds-ruling')"
+check "offsite plus needs-ruling stays claimed" 1 "" \
+  grep -q 'reclaimed' <<<"$offsite_both"
+check "a one-hour claim stays claimed for the ordinary age reason" 0 "KEEP" \
+  claim_decision 1 false 3600
+check "the offsite exemption flag is named once at its issueflow decision point" 0 "1" \
+  grep -c 'offsite' "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
+check "no reconciler mutation names offsite (#68 D4)" 1 "" \
+  grep -E 'gh (issue|pr) edit.*offsite' \
+    "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh" \
+    "$ROOT/actions/labels-reconcile/labels-reconcile.sh"
 
 # -- an already-applied stale heals off, and no edit names the flag ----------
 jq -n --arg l "$(iso_at $((INOW - 3600)))" \

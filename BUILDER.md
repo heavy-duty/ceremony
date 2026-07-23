@@ -18,7 +18,8 @@ triage bug, and the move is to say so on the issue, not to guess.
 
 - Assign yourself, swap `ready` → `claimed`, and comment that you are
   starting. The claim is a promise of a draft PR soon — a claim with no PR
-  and no activity is what the staleness sweep reclaims.
+  and no activity is what the staleness sweep reclaims unless `offsite`
+  records that its PR lives in another repository.
 - **Abandoning is fine; ghosting is not.** If you stop, say where you got to,
   push the branch if it holds anything useful, unassign, and restore
   `ready`.
@@ -28,9 +29,12 @@ triage bug, and the move is to say so on the issue, not to guess.
 - Branch per issue; open the PR **as a draft early**, `Closes #N` in the
   body. `Closes #N` does not cross repos: when the PR is in a different repo
   from its authorizing issue, use `Part of <owner>/<repo>#N` instead, and
-  comment on that issue with the draft PR link as soon as the draft opens.
+  in the same step set `offsite` and comment on that issue with the draft PR
+  link as soon as the draft opens.
   Triage closes the authorizing issue by hand when its acceptance criteria
-  are met; the cross-repo merge never closes it. This codifies the linkage
+  are met; at that handoff the builder reports whether the cross-repo PR
+  merged or closed and clears `offsite` in the same comment. The cross-repo
+  merge never closes the authorizing issue. This codifies the linkage
   builders already used on rig#112 and ceremony #13/#16 rather than adding a
   new review obligation. Drafts are invisible to the reviewer panel on
   purpose — the draft phase is yours.
