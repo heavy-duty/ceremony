@@ -251,6 +251,7 @@ on:
   workflow_dispatch:                 # bootstraps missing labels on a fresh repo
   pull_request_target:
     types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
+  # Unreleased — not in 0.1.0; add only with the first tag carrying ceremony#32.
   issues:
     types: [opened, labeled, unlabeled, assigned, unassigned, closed]
 permissions:
@@ -261,6 +262,10 @@ jobs:
   labels:
     uses: heavy-duty/ceremony/.github/workflows/labels.yml@<pinned-tag>
 ```
+
+The `issues:` trigger is **unreleased** and is not in `0.1.0`. A consumer
+pinned to `0.1.0` omits it. Add it only when bumping every ceremony reference
+to the first tag carrying ceremony#32; never mix refs to adopt it early.
 
 `pull_request_target` is intentional: fork PRs need the base repository's
 token to write labels. The reusable workflow executes no PR code. It checks
@@ -277,6 +282,12 @@ triage-actors=example-triage-bot
 scope:cli|C5DEF5|The command-line surface
 scope:docs|C5DEF5|Documentation
 ```
+
+The mandatory `triage-actors=` setting is also **unreleased** and is not
+accepted by `0.1.0`. At that tag the file contains `panel=` plus scope rows
+only; adding `triage-actors=` is a parse failure, not an ignored setting. Add
+it at the same pin bump as the `issues:` trigger, to the first tag carrying
+ceremony#32 — never before it and never through mixed refs.
 
 Both actor lists are whitespace-separated. `triage-actors` names the identities
 allowed to mint issues without the sweep applying `needs-triage`. Label rows use exactly
