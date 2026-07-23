@@ -52,8 +52,9 @@ jobs:
     uses: ./.github/workflows/release-exercise.yml
 
   # The self-guards (issue #11): this repo eats exactly what it serves. The
-  # three guard actions run against the REAL tree — VERSION, CHANGELOG.md,
-  # drills/ — through the same `uses:` steps every consumer's CI carries.
+  # guard actions run against the REAL tree — VERSION, CHANGELOG.md,
+  # drills/, .github/workflows/ — through the same `uses:` steps every
+  # consumer's CI carries.
   # These steps are also the composite-action wiring proof (issue #5's
   # acceptance criterion: action.yml resolving, $GITHUB_ACTION_PATH, the
   # relative lib sourcing) that action-exercise carried with scratch files
@@ -73,6 +74,7 @@ jobs:
       - uses: ./actions/changelog-armed
       - uses: ./actions/changelog-monotonic
       - uses: ./actions/drill-recorded
+      - uses: ./actions/runner-isolated
 
   # Exercises changelog-monotonic the way a consumer does, against a
   # CONSTRUCTED history. The self-guards job above runs the same action on
