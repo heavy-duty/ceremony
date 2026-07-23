@@ -414,5 +414,80 @@ warm="$(reconcile_probe "$(printf 'state:addressing\nmerge-next\nstale\nblocker:
 expect "a bootstrapped repo converges the state as well" \
   yes "$(grep -q 'state -> state:addressing' <<<"$warm" && echo yes || echo no)"
 
+# ---------------------------------------------------------------------------
+# needs-ruling (#51): a pending human decision. Hand-set intent the machine
+# reads and never writes — an EXCLUSION on needs-human, never a blocker and
+# never a latch. #50's D8 by construction: needs-ruling and state:needs-human
+# can never share a PR.
+# ---------------------------------------------------------------------------
+DRAFT=false HEAD_SHA=head1 REQUESTED="" REVIEWS_JSON="$ALL_APPROVE" MERGEABLE=MERGEABLE CHECKS=SUCCESS
+LABELS=""
+expect "the ruling-free fixture hands off (control)" state:needs-human "$(decide_state)"
+LABELS="needs-ruling"
+expect "a pending ruling excludes needs-human" state:addressing "$(decide_state)"
+LABELS=""
+expect "...and clearing it hands off again — an exclusion, not a latch" state:needs-human "$(decide_state)"
+LABELS="needs-ruling" DRAFT=true
+expect "a draft with a ruling pending is still building" state:building "$(decide_state)"
+DRAFT=false
+
+# blockers() must not know the label exists: it is not a branch fact, and the
+# converge loop strips every BLOCKERS entry the facts do not re-derive —
+# emitting it there is exactly the trap #51 names.
+MERGEABLE=CONFLICTING
+LABELS=""
+expect "conflict fixture emits its blocker (control)" blocker:conflict "$(blockers)"
+LABELS="needs-ruling"
+expect "needs-ruling adds nothing to blockers()" blocker:conflict "$(blockers)"
+MERGEABLE=MERGEABLE LABELS=""
+
+# The guard the other fixtures cannot see: an UNGUARDED has_label read under
+# set -u does not go red — bash treats the unset expansion inside the
+# herestring redirection as a redirection error (bash 5.2: rc 127, the shell
+# survives), so has_label fails OPEN, answering "label absent" with only a
+# stderr complaint. For needs-ruling that would wave a live escalation
+# through to needs-human in any caller that never set LABELS. Pinned by
+# re-sourcing in a clean shell: the LABELS="" init keeps the read silent,
+# and deleting the init turns this red.
+guard_noise="$(bash -uc '. actions/labels-reconcile/labels-reconcile.sh
+  DRAFT=false HEAD_SHA=h REQUESTED="" REVIEWS_JSON="[]" MERGEABLE=MERGEABLE CHECKS=SUCCESS
+  decide_state' 2>&1 >/dev/null)"
+expect "a fresh source reads LABELS cleanly (no unbound complaint)" "" "$guard_noise"
+
+# The full-sweep probes ride the needs-human-otherwise fixture (three
+# head-current approvals, mergeable, green). reconcile_probe cannot serve
+# here — its empty round lands on addressing for its own reasons, and the
+# exclusion must be the ONLY thing moving the state.
+ruling_probe() { # $1 = the PR's labels → the log lines reconcile_pr emits
+  (
+    REPO_LABELS="$(printf 'state:addressing\nstate:needs-human\nmerge-next\nstale\nneeds-ruling')"
+    REPO=owner/repo NOW="$(date +%s)"
+    LABELS="$1"
+    DRAFT=false HEAD_SHA=head1 REQUESTED="" REVIEWS_JSON="$ALL_APPROVE"
+    MERGEABLE=MERGEABLE CHECKS=SUCCESS
+    PR_JSON='{"created_at":"2020-01-01T00:00:00Z"}'
+    run() { :; }                              # swallow mutations
+    gh() { :; }                               # no network
+    reconcile_pr 888 2>&1
+  )
+}
+
+ruled="$(ruling_probe "$(printf 'needs-ruling\nmerge-next')")"
+expect "the exclusion drives the full sweep to addressing" \
+  yes "$(grep -q 'state -> state:addressing' <<<"$ruled" && echo yes || echo no)"
+expect "...retracting merge-next: a PR awaiting a ruling is not merge-me-next" \
+  yes "$(grep -q 'cleared merge-next' <<<"$ruled" && echo yes || echo no)"
+expect "...and the sweep never touches needs-ruling itself" \
+  no "$(grep -q 'needs-ruling' <<<"$ruled" && echo yes || echo no)"
+
+# Staleness: waiting on a human is legitimately quiet (#50 D10) — same
+# treatment as blocked, including taking an already-applied stale back off.
+quiet="$(ruling_probe "needs-ruling")"
+expect "quiet under a pending ruling is never stale" \
+  no "$(grep -q 'stale (' <<<"$quiet" && echo yes || echo no)"
+unstale="$(ruling_probe "$(printf 'needs-ruling\nstale')")"
+expect "...and an already-applied stale comes off" \
+  yes "$(grep -q 'unstale' <<<"$unstale" && echo yes || echo no)"
+
 printf 'labels-reconcile tests: %d passed, %d failed\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
