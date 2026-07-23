@@ -95,6 +95,10 @@ claim_decision() { # $1 assignee count, $2 linked open PR, $3 age seconds
   fi
 }
 
+claim_decision_at() { # $1 assignee count, $2 linked open PR, $3 last activity epoch
+  claim_decision "$1" "$2" "$((NOW - $3))"
+}
+
 blocked_references() { # body on stdin -> issue numbers, one per line
   sed -nE 's/.*Blocked by[[:space:]]+//Ip' \
     | sed -E 's/[.;][[:space:]].*$//' \
@@ -175,8 +179,8 @@ reconcile_issue() {
   if has_issue_label claimed; then
     assignees="$(jq '.assignees | length' <<<"$ISSUE_JSON")"
     grep -qxF "$n" <<<"${OPEN_PR_ISSUES:-}" && open_pr=true
-    age=$((NOW - $(last_issue_activity "$n" "$(jq -r '.created_at' <<<"$ISSUE_JSON")")))
-    decision="$(claim_decision "$assignees" "$open_pr" "$age")"
+    age="$(last_issue_activity "$n" "$(jq -r '.created_at' <<<"$ISSUE_JSON")")"
+    decision="$(claim_decision_at "$assignees" "$open_pr" "$age")"
     case "$decision" in
       FLAG_UNASSIGNED)
         ensure_comment "$n" claimed-unassigned \

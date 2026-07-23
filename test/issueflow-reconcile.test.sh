@@ -31,18 +31,19 @@ check "needs-triage plus queue is a conflict" 0 "FLAG_CONFLICT" queue_decision <
 
 # Invariant 2: claims have an owner and either a PR or recent activity.
 check "claim with open PR stays claimed" 0 "KEEP" claim_decision 1 true 999999
-check "claim below stale boundary stays claimed" 0 "KEEP" claim_decision 1 false $((STALE_AFTER - 1))
-check "claim exactly at stale boundary stays claimed" 0 "KEEP" claim_decision 1 false "$STALE_AFTER"
-check "claim past stale boundary is reclaimed" 0 "RECLAIM" claim_decision 1 false $((STALE_AFTER + 1))
 check "unassigned claim is flagged" 0 "FLAG_UNASSIGNED" claim_decision 0 false 60
 check "quiet unassigned claim is also reclaimed" 0 "RECLAIM" claim_decision 0 false $((STALE_AFTER + 1))
 # shellcheck disable=SC2016 # expansions belong to the isolated bash -c process
-check "injected clock is retained" 0 "1700000000" \
-  bash -c 'ISSUEFLOW_NOW=1700000000 source "$1"; printf "%s\n" "$NOW"' _ \
+check "injected clock: below stale boundary stays claimed" 0 "KEEP" \
+  bash -c 'ISSUEFLOW_NOW=100000 ISSUEFLOW_STALE_HOURS=1 source "$1"; claim_decision_at 1 false 96401' _ \
   "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
 # shellcheck disable=SC2016 # expansions belong to the isolated bash -c process
-check "injected stale hours set the boundary" 0 "10800" \
-  bash -c 'ISSUEFLOW_STALE_HOURS=3 source "$1"; printf "%s\n" "$STALE_AFTER"' _ \
+check "injected clock: exact stale boundary stays claimed" 0 "KEEP" \
+  bash -c 'ISSUEFLOW_NOW=100000 ISSUEFLOW_STALE_HOURS=1 source "$1"; claim_decision_at 1 false 96400' _ \
+  "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
+# shellcheck disable=SC2016 # expansions belong to the isolated bash -c process
+check "injected clock: past stale boundary is reclaimed" 0 "RECLAIM" \
+  bash -c 'ISSUEFLOW_NOW=100000 ISSUEFLOW_STALE_HOURS=1 source "$1"; claim_decision_at 1 false 96399' _ \
   "$ROOT/actions/issueflow-reconcile/issueflow-reconcile.sh"
 
 # Invariant 3: blocked declarations parse and release only when all close.
