@@ -57,6 +57,77 @@ check "date-less version heading parses" 0 "" assert_section 0.4.0 '- A date-les
 check "empty stamped section returns empty output" 0 "" assert_section 0.5.0 ""
 check "missing section returns empty output" 0 "" assert_section 9.9.9 ""
 
+PROBLEM_FIXTURE="$TMP/CHANGELOG.problems.md"
+assert_problem() {
+  local version="$1" expected_status="$2" expected="$3"
+  check "predicate: $version / $expected" "$expected_status" "$expected" \
+    changelog_section_problem "$PROBLEM_FIXTURE" "$version"
+}
+
+cat >"$PROBLEM_FIXTURE" <<'EOF'
+# Changelog
+
+## Unreleased
+
+### Added
+
+### Changed
+
+### Fixed
+
+## 1.0.0
+
+- Flat dash entry.
+
+## 1.1.0
+
+* Flat star entry.
+
+## 1.2.0
+
+### Fixed
+
+- Fixed entry.
+
+## 1.3.0
+
+### Added
+
+- Added entry.
+
+### Changed
+
+* Changed entry.
+
+### Fixed
+
+- Fixed entry.
+
+## 1.4.0
+
+## 1.5.0
+
+### Added
+
+## 1.6.0
+
+### Added
+
+### Fixed
+
+- Fixed entry.
+EOF
+
+assert_problem Unreleased 0 ""
+assert_problem 1.0.0 0 ""
+assert_problem 1.1.0 0 ""
+assert_problem 1.2.0 0 ""
+assert_problem 1.3.0 0 ""
+assert_problem 1.4.0 1 "section '1.4.0' has no entries — a heading is not an entry"
+assert_problem 1.5.0 1 "section '1.5.0' has no entries — a heading is not an entry"
+assert_problem 1.6.0 1 "section '1.6.0' has an empty heading: '### Added'"
+assert_problem 9.9.9 1 "no section for '9.9.9'"
+
 WRAPPER="$ROOT/bin/changelog-section"
 check "wrapper publishes the requested body" 0 "The seven-oh entry" "$WRAPPER" 0.7.0 "$FIXTURE"
 check "wrapper refuses an empty section" 1 "no section for '0.5.0'" "$WRAPPER" 0.5.0 "$FIXTURE"

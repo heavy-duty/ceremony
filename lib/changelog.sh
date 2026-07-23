@@ -20,3 +20,48 @@ changelog_section() {
     found { body = 1; print }
   ' "$1"
 }
+
+# changelog_section_problem <file> <version>
+#
+# Print the first reason a version section cannot be published. Unreleased is
+# a work-in-progress template, so its headings may deliberately be empty.
+# A printed problem returns 1; silence returns 0.
+changelog_section_problem() {
+  local file="$1" ver="$2" notes problem
+
+  if ! awk -v ver="$ver" '/^## / && $2 == ver { found = 1; exit } END { exit !found }' "$file"; then
+    printf "no section for '%s'\n" "$ver"
+    return 1
+  fi
+
+  [ "$ver" = "Unreleased" ] && return 0
+
+  notes="$(changelog_section "$file" "$ver")"
+  if ! printf '%s\n' "$notes" | awk '/^[[:space:]]*[-*][[:space:]]/ { found = 1; exit } END { exit !found }'; then
+    printf "section '%s' has no entries — a heading is not an entry\n" "$ver"
+    return 1
+  fi
+
+  problem="$(
+    printf '%s\n' "$notes" | awk '
+      /^### / {
+        if (heading != "" && !entry) {
+          reported = 1
+          print heading
+          exit
+        }
+        heading = $0
+        entry = 0
+        next
+      }
+      heading != "" && /^[[:space:]]*[-*][[:space:]]/ { entry = 1 }
+      END {
+        if (!reported && heading != "" && !entry) print heading
+      }
+    '
+  )"
+  if [ -n "$problem" ]; then
+    printf "section '%s' has an empty heading: '%s'\n" "$ver" "$problem"
+    return 1
+  fi
+}
