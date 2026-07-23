@@ -66,6 +66,7 @@ comments, unassigns the stale owner, and restores `ready`.
 |---|---|---|
 | `stale` | `#B60205` | no activity for 48h — sweep-managed, never hand-applied |
 | `blocked` | `#6A737D` | (see above — same label serves PRs waiting on another PR/issue; legitimately quiet, the staleness sweep skips it) |
+| `offsite` | `#CFD3D7` | issue deliverable is a PR in another repository; set by the builder with the draft link and cleared by the builder at handoff |
 | `needs-ruling` | `#D4C5F9` | a human decision is required; the question, options and a recommendation are in the flagging comment. Set by triage or the builder; a state, not a signal — it clears on agreement, not on a reply |
 | `release` | `#0E8A16` | release flow, versioning, packaging work — and the ceremony PR itself |
 | `merge-next` | `#0E8A16` | head of the merge queue — merge this one next. Queue order is *intent*: never set by the reconciler, only cleared by it |
@@ -98,6 +99,15 @@ escalation. The nudge carries no marker on purpose: the comment is itself
 activity, so it resets its own window and never repeats within a quiet
 week. Label churn is not activity — the clock reads comments, reviews and
 commits, or the sweep would reset itself.
+
+`offsite` is issue-only and records that a claimed issue's deliverable lives
+in another repository, where a closing reference cannot make a local open PR
+visible to the sweep (#68). The builder sets it in the same step that posts
+the cross-repo draft link, then clears it at handoff in the same comment that
+reports whether that PR merged or closed. The machine reads the flag and
+never writes it. It stops only the claim-reclaim clock: missing assignees are
+still flagged, queue-label conflicts and missing queue state are still
+repaired, and epic-completion and PR-side stale behavior are unchanged.
 
 ## Scope — which surface? (PRs and issues, any number)
 

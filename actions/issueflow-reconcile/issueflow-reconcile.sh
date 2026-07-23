@@ -101,6 +101,19 @@ claim_decision() { # $1 assignee count, $2 linked open PR, $3 age seconds
   fi
 }
 
+claim_clock_exempt() { # labels on stdin -> EXEMPT | SWEEP
+  local labels
+  labels="$(cat)"
+  # Cross-repo work has no local closing PR by construction (#68), so its
+  # deliberate silence must share the one claim-clock gate with rulings.
+  if grep -qxF offsite <<<"$labels" \
+    || [ "$(ruling_stale_exempt <<<"$labels")" = EXEMPT ]; then
+    echo EXEMPT
+  else
+    echo SWEEP
+  fi
+}
+
 claim_decision_at() { # $1 assignee count, $2 linked open PR, $3 last activity epoch
   claim_decision "$1" "$2" "$((NOW - $3))"
 }
@@ -229,12 +242,10 @@ reconcile_issue() {
     assignees="$(jq '.assignees | length' <<<"$ISSUE_JSON")"
     grep -qxF "$n" <<<"${OPEN_PR_ISSUES:-}" && open_pr=true
     age="$(last_issue_activity "$n" "$(jq -r '.created_at' <<<"$ISSUE_JSON")")"
-    if [ "$(ruling_stale_exempt <<<"$ISSUE_LABELS")" = EXEMPT ]; then
-      # Waiting on a human is legitimately quiet (#50 D10): the reclaim
-      # clock does not run under a pending ruling — the same treatment
-      # `blocked` gets by never reaching this branch at all. Only the clock
-      # stops: an unassigned claim is still a repair the decision must see,
-      # so it runs on a zero age rather than being skipped.
+    if [ "$(claim_clock_exempt <<<"$ISSUE_LABELS")" = EXEMPT ]; then
+      # Legitimately quiet work does not run the reclaim clock. Only the
+      # clock stops: an unassigned claim is still a repair the decision must
+      # see, so it runs on a zero age rather than being skipped.
       decision="$(claim_decision "$assignees" "$open_pr" 0)"
     else
       decision="$(claim_decision_at "$assignees" "$open_pr" "$age")"
