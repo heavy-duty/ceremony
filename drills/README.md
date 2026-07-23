@@ -15,6 +15,17 @@ drill is where they run live *before* a version rests on them.
 2. Install the docs/CONSUMERS.md caller stubs, pinned to the release
    candidate ref. A branch ref works: refs are static identifiers — the
    family's own drill doctrine.
+
+   **Except for the first release** (learned drilling 0.1.0, #11): the
+   stubs' consumer path fetches ceremony at `CEREMONY_SELF_REF` — the very
+   ref the first drill exists to rehearse creating — so the pure pinned
+   path cannot run before some `X.Y.Z` ref exists, and a branch named like
+   the tag must NOT be created on the canonical repo to paper over it (it
+   would shadow the tag for every consumer until someone remembers to
+   delete it). The first drill instead pins the callers to a fork ref
+   carrying the candidate tree with `CEREMONY_SELF_REF` rewritten to the
+   candidate SHA in every pin carrier, and records that one-line deviation
+   in its record. From the second release on, this paragraph is moot.
 3. Give it a fixture `VERSION` / `CHANGELOG.md` / `drills/` in the armed
    state (`X.Y.Z-dev`, `## Unreleased` on top).
 4. Exercise both doors, one probe at a time:
