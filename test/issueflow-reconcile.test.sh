@@ -265,7 +265,7 @@ check "the flag-free control is reclaimed (the clock still runs elsewhere)" 0 ""
 offsite="$(issue_probe 25 $'claimed\noffsite')"
 check "a 10-day-quiet offsite claim is not reclaimed" 1 "" \
   grep -q 'reclaimed' <<<"$offsite"
-offsite_unassigned="$(issue_probe 26 $'claimed\noffsite' 0)"
+issue_probe 26 $'claimed\noffsite' 0 >/dev/null
 check "an unassigned offsite claim is still flagged" 0 "" \
   grep -q 'issueflow:claimed-unassigned' "$TMP/posted-26"
 offsite_open="$(issue_probe 27 $'claimed\noffsite' 1 true)"
