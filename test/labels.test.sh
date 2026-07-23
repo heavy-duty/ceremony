@@ -27,6 +27,7 @@ check "core and config rows merge" 0 "scope:two|C5DEF5|Second scope" bash -c \
   'source "$1"; core_label_rows; configured_label_rows "$2"' _ \
   "$ROOT/actions/labels-reconcile/labels-reconcile.sh" "$TMP/good.conf"
 attention_row='attention|D93F0B|A demand is parked here for the assignee: pick up the thread, ack by removing this label'
+# shellcheck disable=SC2016 # expansion belongs to the nested bash
 check "attention core row is emitted once, byte-exact" 0 "1" bash -c \
   'source "$1"; core_label_rows | grep -cxF "$2"' _ \
   "$ROOT/actions/labels-reconcile/labels-reconcile.sh" "$attention_row"
