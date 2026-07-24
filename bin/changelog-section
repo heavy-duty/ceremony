@@ -17,7 +17,7 @@ fi
 }
 
 if ! diagnosis="$(changelog_section_problem "$changelog" "$ver")"; then
-  echo "changelog-section: $changelog has no section for '$ver' — the release PR stamps the Unreleased section with version + date BEFORE the tag" >&2
+  echo "changelog-section: $changelog has no section for '$ver' — the release PR assembles the section (changelog-assemble) with version + date BEFORE the tag" >&2
   printf 'changelog-section: %s\n' "$diagnosis" >&2
   exit 1
 fi

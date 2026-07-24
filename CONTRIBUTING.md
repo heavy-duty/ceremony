@@ -40,11 +40,12 @@ already proven:
 
 1. **One issue, one PR**, opened as a **draft** while building, with
    `Closes #N` in the body. Drafts are invisible to the reviewer panel on
-   purpose. Every behavior change adds one line to `CHANGELOG.md` under
-   `## Unreleased` (in a grouped changelog, append under an existing heading
-   and create one only when the kind is genuinely new; insert **above** the
-   heading below — never type over it; the monotonic guard exists because of
-   exactly that edit).
+   purpose. Every behavior change writes one fragment,
+   `changelog.d/<issue>.md` — the exact prose to publish, nothing else
+   (cross-repo work names it `<repo>-<issue>.md`; a grouped repo puts its
+   `### Added` / `### Changed` / `### Fixed` headings inside the fragment).
+   Never edit `CHANGELOG.md` for an entry — the release PR assembles the
+   section from the fragments (#112).
 2. **When it's ready**: mark ready-for-review and request the whole panel.
 3. **Rounds are answered whole.** Wait until every reviewer has a verdict in,
    then answer the entire round in a **single reply**, push the fixes, and

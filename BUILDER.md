@@ -105,10 +105,14 @@ triage bug, and the move is to say so on the issue, not to guess.
   them as a checklist in the PR body and check them honestly as you go. If
   one turns out to be wrong or unreachable, say so on the issue and get it
   amended by triage — do not silently ship less than the issue says.
-- Every behavior change adds one line to `CHANGELOG.md` under
-  `## Unreleased` — in a grouped changelog, append under an existing heading
-  and create one only when the kind is genuinely new; insert **above** the
-  heading below, never over it (the monotonic guard's whole reason to exist).
+- Every behavior change writes one fragment, `changelog.d/<issue>.md`,
+  named for the authorizing issue (`<repo>-<issue>.md` when the work is
+  cross-repo) — the exact prose that will be published, nothing else: `- `
+  bullets, and in a grouped repo the `### Added` / `### Changed` /
+  `### Fixed` headings inside the fragment, creating a rarer kind only when
+  a change genuinely is one. Never edit `CHANGELOG.md` for an entry — the
+  release PR assembles the section from the fragments (#112); the monotonic
+  guard still refuses anything that deletes a shipped heading.
 - Follow the repo's conventions file and match the code you touch. Tests are
   not optional: the issue's test plan is the floor, not the ceiling.
 - **Scope discipline: the PR does the issue — whole, and nothing else.**

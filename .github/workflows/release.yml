@@ -344,7 +344,7 @@ jobs:
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/changelog.sh"
           if ! diagnosis="$(changelog_section_problem CHANGELOG.md "$VER")"; then
-            echo "CHANGELOG.md has no '## $VER' section — stamp the Unreleased section in the release PR before tagging; refusing to publish an empty release" >&2
+            echo "CHANGELOG.md has no '## $VER' section — run changelog-assemble in the release PR before tagging; refusing to publish an empty release" >&2
             printf '%s\n' "$diagnosis" >&2
             exit 1
           fi

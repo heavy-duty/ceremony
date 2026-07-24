@@ -2,37 +2,10 @@
 
 The curated history of the ceremony itself. Each release's section is
 published verbatim as that release's body (lib/changelog.sh extracts it),
-so entries say what changed, cite the issue, and stop.
-
-## Unreleased
-
-- `test/changelog-assembled.test.sh` — keep the trio interaction aligned with fragment mode: a dropped entry makes armed red too, while a hand-edited section leaves assembled as the sole red (#126).
-- `changelog-armed` — treat `changelog.d/` as the arming, validate every development fragment, and require bare releases to consume the directory into their exact publishable section (#115).
-- `actions/changelog-assembled` — a release PR's stamped section must be byte-for-byte what the fragments it consumed assemble to, replayed from the merge base; inapplicable trees pass with a NOTICE (#116).
-- `lib/changelog.sh` + `bin/changelog-assemble` — read the `changelog.d/` fragments, assemble one release section (canonical group order, one shape per repo), and consume exactly what was published (#114).
-- BUILDER.md — the directed hold is the parked claim's fifth shape, its attention demand is acknowledged in the declaration comment, and its board bookkeeping covers in-flight work; TRIAGE.md no longer excludes it (#113).
-- BUILDER.md — the handed-off PR is the parked claim's fourth shape, its handoff is its declaration, and shape 2 covers the round awaiting its first verdicts (#109).
-- `labels-reconcile` — a degraded mergeability/checks read now logs gh's actual stderr (collapsed, bounded) beside the byte-identical counted line, and the blind-sweep warning leads with the observed reason instead of asserting the permissions cause (#101).
-- `LABELS.md` — drop the vendored scope-table enumeration; the per-repo set lives in `.github/labels.conf` and the repo's own CONTRIBUTING (#104).
-- Changelog publication — count entries instead of bytes, refuse dangling grouped headings, and seed grouped re-arms with Added/Changed/Fixed (#98).
-- `labels-reconcile` — warn once per sweep when a repository lacks labels declared by the pinned core taxonomy (#105).
-- `labels-reconcile` — grant callers private-repo check reads and warn when an entire PR sweep is blind (#95).
-- `labels-reconcile` — the bootstrap now retires the six GitHub defaults `LABELS.md` publishes as deleted, tolerating both an already-absent label and a refused delete (#93).
-- `issueflow-reconcile` — a triage-authored issue arrival stands down with exit 0 instead of killing the run before the sweep (#91).
-- FLEET.md — the assignee's `attention` wake: one role-independent trigger ahead of every per-role list, one acked session per demand; a spec on paper until `duty.sh` polls it (#86).
-- `attention` doctrine — define its assignee-owned pickup, ack, queue and clock semantics across labels, triage, and builder roles (#85).
-- `attention` — add the issue-only, hand-set assignee-demand flag to the core label taxonomy (#84).
-- `issueflow-reconcile` — keep cross-repo references out of local dependency decisions and require triage to resolve cross-repo blockers by hand (#61).
-- `needs-ruling` — the cross-cutting flag for a pending human decision, excluded from `state:needs-human` and from the staleness sweep (#51).
-- Cross-repo doctrine: the panel is the PR's repo's roster, a review request is authorization but not panel membership, and `Part of <repo>#N` replaces the `Closes #N` that cannot cross repos (#57).
-- `actions/runner-isolated` — a `pull_request`-triggered job may never run on a self-hosted runner (#58).
-- The sweep's `needs-ruling` invariants, one implementation for both surfaces: the issue-side staleness exemption, the bare-flag check (comment-only, the label is never removed), and the 7-day nudge to the decider (#52).
-- `offsite` — protect claimed issues whose PR lives in another repository from the claim-reclaim clock (#68).
-- `issueflow-reconcile` — nudge once when an `offsite` flag outlives every visible cross-referenced PR (#69).
-- Ruling doctrine — define every human-owned trigger, the fixed escalation shape, and the 0–24h builder-to-triage ladder (#72).
-- The sweep observes the escalation contract: a malformed escalation is named field-by-field, and the ladder's 12h/24h rungs each draw one comment to the flag-setter — comment-only, per-episode, both surfaces (#73).
-- FLEET.md — the operator notifier's `needs-ruling` queue (one tracked message per item, edited in place across the rungs) and triage's past-24h wake condition; a spec on paper until an operator updates the box (#74).
-- One issue at a time counts build work in flight: the parked claim's three shapes, its declared-never-inferred comment, and triage's duty to name a directed hold as a park (#77).
+so entries say what changed, cite the issue, and stop. Entries arrive as
+fragments — one `changelog.d/<issue>.md` per PR, never an edit to this
+file — and the release PR assembles them into the next section here
+(`bin/changelog-assemble`, #112).
 
 ## 0.1.0 — 2026-07-22
 

@@ -87,11 +87,14 @@ jobs:
           echo "RELEASE_ASSETS_DIR=$RUNNER_TEMP/release-assets" >> "$GITHUB_ENV"
       - name: construct the fixture consumer tree and the gh stub
         # The fixture release.yml's steps run against (below): a base at
-        # 0.6.9-dev with an armed changelog, then the ceremony merge —
-        # VERSION bumped bare, Unreleased stamped. Same shape as
-        # test/release-chain.test.sh. The gh stub answers the one API fact
-        # the ceremony path consults (the merged release-labeled PR) so
-        # nothing here talks to GitHub.
+        # 0.6.9-dev armed the fragment way (#112) — changelog.d/ with its
+        # marker and one fragment — then the ceremony merge: VERSION bumped
+        # bare and the section stamped by the REAL assembler, the command
+        # the real ceremony PR runs by hand (#112 D12), so the exercise
+        # consumes the tool end to end instead of hand-writing its output.
+        # Same shape as test/release-chain.test.sh. The gh stub answers the
+        # one API fact the ceremony path consults (the merged
+        # release-labeled PR) so nothing here talks to GitHub.
         run: |
           mkdir -p "$RUNNER_TEMP/stub"
           cat > "$RUNNER_TEMP/stub/gh" <<'EOF'
@@ -110,31 +113,18 @@ jobs:
           cat > CHANGELOG.md <<'EOF'
           # Changelog
 
-          ## Unreleased
-
-          - The entry this release ships.
-
           ## 0.6.8 — 2026-07-01
 
           - An older entry.
           EOF
-          git add VERSION CHANGELOG.md
+          mkdir changelog.d
+          printf '# changelog.d/ — assembled at release (heavy-duty/ceremony#112); the marker keeps the directory tracked.\n' > changelog.d/README.md
+          printf -- '- The entry this release ships.\n' > changelog.d/42.md
+          git add VERSION CHANGELOG.md changelog.d
           git commit -qm "base"
           printf '0.7.0\n' > VERSION
-          cat > CHANGELOG.md <<'EOF'
-          # Changelog
-
-          ## Unreleased
-
-          ## 0.7.0 — 2026-07-21
-
-          - The entry this release ships.
-
-          ## 0.6.8 — 2026-07-01
-
-          - An older entry.
-          EOF
-          git add VERSION CHANGELOG.md
+          bash "$CEREMONY_DIR/bin/changelog-assemble" 0.7.0 2026-07-21
+          git add -A
           git commit -qm "release: 0.7.0"
           echo "FIXTURE_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
       - name: gather the facts — version, base version, released, labeled

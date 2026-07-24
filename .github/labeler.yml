@@ -16,6 +16,7 @@ scope:release-flow:
           - bin/**
           - VERSION
           - CHANGELOG.md
+          - changelog.d/**
           - drills/**
           - test/decide.test.sh
           - test/facts.test.sh
