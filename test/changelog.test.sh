@@ -168,4 +168,174 @@ check "realistic changelog keeps its production heading shape" 0 "A mint records
 check "realistic adjacent release remains independently extractable" 0 "Merging the release PR" \
   "$WRAPPER" 0.8.0 "$REALISTIC"
 
+# --- the fragment reader (#114) ----------------------------------------------
+
+FRAG="$TMP/frags"
+mkdir -p "$FRAG"
+
+check "fragments: absent directory is empty output, not an error" 0 "" \
+  changelog_fragments "$TMP/no-such-dir"
+check "fragments: fragment-free directory is empty output, not an error" 0 "" \
+  changelog_fragments "$FRAG"
+
+printf 'marker\n' >"$FRAG/README.md"
+check "fragments: README.md is the directory marker, never a fragment" 0 "" \
+  changelog_fragments "$FRAG"
+
+printf -- '- Two.\n' >"$FRAG/2.md"
+printf -- '- Nine.\n' >"$FRAG/9.md"
+printf -- '- Ten.\n' >"$FRAG/10.md"
+printf -- '- Cross.\n' >"$FRAG/ceremony-14.md"
+printf -- '- Local fourteen.\n' >"$FRAG/14.md"
+
+assert_fragments_order() {
+  local expected="$1" actual
+  actual="$(changelog_fragments "$FRAG" | awk -F/ '{ print $NF }' | tr '\n' ' ')"
+  actual="${actual% }"
+  [ "$actual" = "$expected" ] || {
+    printf 'wanted: %s\ngot: %s\n' "$expected" "$actual"
+    return 1
+  }
+}
+check "fragments: issue number descending (numeric, 10 before 9), filename tie-break" 0 "" \
+  assert_fragments_order "14.md ceremony-14.md 10.md 9.md 2.md"
+
+# --- the fragment predicate (#114) -------------------------------------------
+
+PF="$TMP/frag-problems"
+mkdir -p "$PF"
+
+printf -- '- Fine.\n' >"$PF/7.md"
+check "fragment predicate: a flat fragment passes" 0 "" \
+  changelog_fragment_problem "$PF/7.md"
+
+cat >"$PF/8.md" <<'EOF'
+### Added
+
+- Grouped fine.
+EOF
+check "fragment predicate: a grouped fragment passes" 0 "" \
+  changelog_fragment_problem "$PF/8.md"
+
+printf -- '- Cross-repo.\n' >"$PF/ceremony-14.md"
+check "fragment predicate: a cross-repo name passes" 0 "" \
+  changelog_fragment_problem "$PF/ceremony-14.md"
+
+printf -- '- Bad name.\n' >"$PF/Fix-12.md"
+check "fragment predicate: an uppercase prefix is refused, file named" 1 "Fix-12.md" \
+  changelog_fragment_problem "$PF/Fix-12.md"
+printf -- '- Bad name.\n' >"$PF/notes.txt"
+check "fragment predicate: a non-.md file is refused, file named" 1 "notes.txt" \
+  changelog_fragment_problem "$PF/notes.txt"
+printf -- '- Bad name.\n' >"$PF/12.markdown"
+check "fragment predicate: .markdown is refused, file named" 1 "12.markdown" \
+  changelog_fragment_problem "$PF/12.markdown"
+printf -- '- No number.\n' >"$PF/notes.md"
+check "fragment predicate: a name with no trailing issue number is refused" 1 "notes.md" \
+  changelog_fragment_problem "$PF/notes.md"
+
+cat >"$PF/20.md" <<'EOF'
+## 1.0.0 — 2026-07-24
+
+- Smuggled heading.
+EOF
+check "fragment predicate: a '## ' line is refused — the heading is the assembler's" 1 \
+  "the section heading is the assembler's to write" \
+  changelog_fragment_problem "$PF/20.md"
+
+printf '### Added\n' >"$PF/21.md"
+check "fragment predicate: no bullet anywhere is refused" 1 \
+  "has no entries — a heading is not an entry" \
+  changelog_fragment_problem "$PF/21.md"
+
+cat >"$PF/22.md" <<'EOF'
+### Added
+
+### Fixed
+
+- Fixed entry.
+EOF
+check "fragment predicate: a dangling grouped heading is refused, heading named" 1 \
+  "has an empty heading: '### Added'" \
+  changelog_fragment_problem "$PF/22.md"
+
+# --- the assembler (#114) ----------------------------------------------------
+
+assert_assemble() {
+  local dir="$1" expected="$2" actual
+  actual="$(changelog_assemble "$dir")"
+  [ "$actual" = "$expected" ] || {
+    printf 'wanted:\n%s\ngot:\n%s\n' "$expected" "$actual"
+    return 1
+  }
+}
+
+AF="$TMP/assemble-flat"
+mkdir -p "$AF"
+printf 'marker\n' >"$AF/README.md"
+cat >"$AF/3.md" <<'EOF'
+- Three — an em dash, and prose that
+  wraps onto a continuation line.
+EOF
+printf -- '- Ten.\n- Ten again.\n' >"$AF/10.md"
+check "assemble: flat fragments, newest issue first, prose verbatim" 0 "" \
+  assert_assemble "$AF" $'- Ten.\n- Ten again.\n- Three — an em dash, and prose that\n  wraps onto a continuation line.'
+
+check "assemble: an empty directory is empty output — refusing is the caller's stance" 0 "" \
+  changelog_assemble "$TMP/no-such-dir"
+
+AG="$TMP/assemble-grouped"
+mkdir -p "$AG"
+cat >"$AG/21.md" <<'EOF'
+### Fixed
+
+- Fixed twenty-one.
+EOF
+cat >"$AG/20.md" <<'EOF'
+### Added
+
+- Added twenty.
+
+### Docs
+
+- Docs twenty.
+EOF
+cat >"$AG/19.md" <<'EOF'
+### Security
+
+- Security nineteen.
+
+### Added
+
+- Added nineteen.
+EOF
+check "assemble: canonical group order, unnamed group appended, fragment order inside a group" 0 "" \
+  assert_assemble "$AG" $'### Added\n\n- Added twenty.\n- Added nineteen.\n\n### Fixed\n\n- Fixed twenty-one.\n\n### Security\n\n- Security nineteen.\n\n### Docs\n\n- Docs twenty.'
+
+AM="$TMP/assemble-mixed"
+mkdir -p "$AM"
+printf -- '- Flat five.\n' >"$AM/5.md"
+cat >"$AM/6.md" <<'EOF'
+### Added
+
+- Grouped six.
+EOF
+check "assemble: mixed shapes refused, grouped side named" 1 "6.md" \
+  changelog_assemble "$AM"
+check "assemble: mixed shapes refused, flat side named too" 1 "5.md" \
+  changelog_assemble "$AM"
+
+AX="$TMP/assemble-selfmixed"
+mkdir -p "$AX"
+cat >"$AX/7.md" <<'EOF'
+- Ungrouped lead.
+
+### Added
+
+- Grouped follow.
+EOF
+check "assemble: one fragment mixing both shapes is refused, file named" 1 \
+  "'$AX/7.md' mixes grouped headings and ungrouped bullets" \
+  changelog_assemble "$AX"
+
 summary
