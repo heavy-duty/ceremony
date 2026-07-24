@@ -1,0 +1,8 @@
+name: Derive scope labels
+description: Additively apply path-derived scope:* labels to a PR — the only write is POST (issue #130)
+runs:
+  using: composite
+  steps:
+    - name: derive and add scope labels
+      shell: bash
+      run: bash "$GITHUB_ACTION_PATH/labels-scope.sh"
