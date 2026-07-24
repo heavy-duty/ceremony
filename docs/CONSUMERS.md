@@ -306,7 +306,10 @@ on:
   # Available at 0.2.0 and later (the first tag carrying ceremony#32); a
   # consumer pinned to 0.1.0 omits this block.
   issues:
-    types: [opened, labeled, unlabeled, assigned, unassigned, closed]
+    # edited/reopened are unreleased — not in 0.2.0; add them with the pin
+    # bump to the first tag carrying ceremony#144, the same bump as the
+    # pull_request_target additions above.
+    types: [opened, edited, assigned, unassigned, labeled, unlabeled, closed, reopened]
 permissions:
   contents: read
   checks: read          # mergeability/check-rollup read for PR state
@@ -326,18 +329,23 @@ needs both explicit reads above; without them the failure appears as an empty
 The `issues:` trigger is available at `0.2.0` and later — `0.2.0` is the
 first tag carrying ceremony#32. A consumer pinned to `0.1.0` omits it. Adopt
 it only by bumping every ceremony reference to `0.2.0` or later; never mix
-refs to adopt it early.
+refs to adopt it early. At `0.2.0` the type list stops at `closed`: `edited`
+and `reopened` are newer, part of the pending stub edit below.
 
 `pull_request_target` is intentional: fork PRs need the base repository's
 token to write labels. The reusable workflow executes no PR code. It checks
 out only the consumer's base branch and the pinned ceremony implementation.
 The #52 ruling invariants ride exactly these triggers — but the caller above
 is no longer the #18 shape, so adopting current triggers is a stub edit, not
-a bare pin bump. The pending edit is `review_requested` and
-`review_request_removed` (#137): the wake that clears `blocker:unrequested`
-the moment the panel is asked, without which a quiet repo wears that flag
-until the advisory cron. Make that edit with the pin bump to the first tag
-carrying ceremony#137 — never before it and never through mixed refs.
+a bare pin bump. The pending edits are `review_requested` and
+`review_request_removed` on `pull_request_target:` (#137) — the wake that
+clears `blocker:unrequested` the moment the panel is asked, without which a
+quiet repo wears that flag until the advisory cron — and `edited` and
+`reopened` on `issues:` (#144): the wakes for a body edit rewriting the
+`Blocked by #N` declaration the reconcile sweep parses, and for a closed
+issue re-entering the queue wearing labels derived when it closed. Make both
+edits together, with the pin bump to the first tag carrying ceremony#137 and
+ceremony#144 — never before it and never through mixed refs.
 
 `.github/labels.conf` has one mandatory panel setting, one mandatory
 `triage-actors` setting, and then zero or more scope rows:
