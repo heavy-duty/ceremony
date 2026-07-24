@@ -84,8 +84,9 @@ triage bug, and the move is to say so on the issue, not to guess.
   one turns out to be wrong or unreachable, say so on the issue and get it
   amended by triage — do not silently ship less than the issue says.
 - Every behavior change adds one line to `CHANGELOG.md` under
-  `## Unreleased` — insert **above** the heading below it, never over it
-  (the monotonic guard's whole reason to exist).
+  `## Unreleased` — in a grouped changelog, append under an existing heading
+  and create one only when the kind is genuinely new; insert **above** the
+  heading below, never over it (the monotonic guard's whole reason to exist).
 - Follow the repo's conventions file and match the code you touch. Tests are
   not optional: the issue's test plan is the floor, not the ceiling.
 - **Scope discipline: the PR does the issue — whole, and nothing else.**

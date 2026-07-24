@@ -23,10 +23,17 @@ stamps:
    ([lib/version.sh](lib/version.sh)).
 2. **The changelog is stamped *and re-armed* — two edits, not one**
    (box#108). `## Unreleased` becomes `## X.Y.Z — DATE`, and an **empty
-   `## Unreleased` goes back on top**, immediately above it:
+   `## Unreleased` goes back on top**, immediately above it. When the repo
+   groups entries, the ceremony PR seeds its three standing headings:
 
    ```markdown
    ## Unreleased
+
+   ### Added
+
+   ### Changed
+
+   ### Fixed
 
    ## 0.7.1 — 2026-07-19
 
@@ -136,15 +143,19 @@ keyed on the tree's version:
 - `-dev` tree → the top section **must** be `## Unreleased`.
 - bare tree (the ceremony PR and its merge) → the top section may be
   `## Unreleased` (re-armed) *or* the stamped section for exactly that
-  version — **and** that version's section must exist and carry prose,
-  because it is the one about to ship (the half-ceremony refusal, rig#67:
-  version bumped, stamp missing — asserted through the very extractor the
-  publisher uses, so the two cannot disagree about what a section is).
+  version — **and** that version's section must exist, carry at least one
+  `-` or `*` entry, and have no `### ` heading without an entry before the
+  next heading or section end. A heading is not an entry. These publication
+  rules do not apply to `Unreleased`: the empty three-heading template is
+  deliberately valid there (the half-ceremony refusal, rig#67: version
+  bumped, stamp missing — asserted through the very extractor the publisher
+  uses, so the two cannot disagree about what a section is).
 
 **The incident**: box#108 / rig#66 — the silent mislanding described
 [above](#what-a-release-is). **Red means** a PR entry has nowhere safe to
-land; **the fix** is to re-arm: add an empty `## Unreleased` above the top
-stamped section.
+land, or a stamped version would publish no entries or a dangling grouped
+heading; **the fix** is to re-arm the top or delete/populate the named
+heading before publishing.
 
 **Do not "simplify" this to "always require `## Unreleased`".** The
 unconditional form is false by construction on the ceremony PR's own tree
