@@ -45,7 +45,8 @@ run() { # every mutation goes through here — DRY_RUN=1 logs instead of doing
 }
 
 glob_to_regex() { # $1 = glob (the subset above) → anchored ERE, one line
-  local glob="$1" out="" c i=0 n="${#glob}"
+  local glob="$1" out="" c i=0 n
+  n="${#glob}"
   while [ "$i" -lt "$n" ]; do
     c="${glob:i:1}"
     case "$c" in
@@ -113,7 +114,7 @@ derive_labels() { # $1 = "label<TAB>glob" lines, $2 = changed files (one per
   # line) → matched labels, one per line, config order, deduped
   local tsv="$1" files="$2" label glob matched=$'\n'
   [ -n "$files" ] || return 0
-  while IFS="$(printf '\t')" read -r label glob; do
+  while IFS=$'\t' read -r label glob; do
     [ -n "$label" ] || continue
     case "$matched" in *$'\n'"$label"$'\n'*) continue ;; esac
     if printf '%s\n' "$files" | grep -qE -- "$(glob_to_regex "$glob")"; then

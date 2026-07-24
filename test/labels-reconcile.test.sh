@@ -92,6 +92,28 @@ expect "unrelated scope labels do not affect a complete core taxonomy" "" \
 scope:consumer-one
 scope:consumer-two")"
 
+# -- the release-shape guard warns, never writes (#130; the #128 incident) ----
+# The caller gates on NOT has_label release and NOT draft; these fix the
+# version matrix. The warning is one line per call — reconcile_pr runs once
+# per PR per sweep, so "exactly one warning per sweep" is by construction.
+shape_warning="$(release_shape_warning 41 2.0.0 2.0.0-dev)"
+expect "bare head over a -dev base warns" yes \
+  "$(grep -qF '::warning::' <<<"$shape_warning" && echo yes || echo no)"
+expect "...naming the PR and both versions" yes \
+  "$(grep -qF '#41 is release-shaped (version 2.0.0-dev -> 2.0.0' <<<"$shape_warning" && echo yes || echo no)"
+expect "...and pointing at the release label, not setting it" yes \
+  "$(grep -qF 'apply release' <<<"$shape_warning" && echo yes || echo no)"
+expect "an ordinary -dev head is silent" "" \
+  "$(release_shape_warning 41 2.0.1-dev 2.0.0-dev)"
+expect "a bare head equal to the base is silent" "" \
+  "$(release_shape_warning 41 2.0.0 2.0.0)"
+expect "an rc head is silent — pre-releases are not the merge door's shape" "" \
+  "$(release_shape_warning 41 2.0.0-rc1 2.0.0-dev)"
+expect "an unreadable head version is silent — never nag on a guess" "" \
+  "$(release_shape_warning 41 "" 2.0.0-dev)"
+expect "a bare head over an unreadable base still warns" yes \
+  "$(release_shape_warning 41 2.0.0 "" | grep -qF '::warning::' && echo yes || echo no)"
+
 # -- drafts are building, whoever is requested --------------------------------
 DRAFT=true HEAD_SHA=head1 REQUESTED="" REVIEWS_JSON='[]'
 expect "draft PR is building" state:building "$(decide_state)"
