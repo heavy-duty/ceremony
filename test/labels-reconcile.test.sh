@@ -74,6 +74,24 @@ expect "...within the 304-byte bound" yes \
 exact_reason="$(read_failure_reason "$(printf 'e%.0s' {1..300})")"
 expect "a 300-char reason passes through whole" 300 "${#exact_reason}"
 
+# -- a missing core taxonomy row is visible without mutating labels ----------
+core_rows="$(core_label_rows)"
+core_names="$(cut -d'|' -f1 <<<"$core_rows")"
+expect "a complete core taxonomy does not warn" "" \
+  "$(missing_core_labels_warning "$core_rows" "$core_names")"
+expect "one missing core label is named exactly" \
+  "::warning::labels: missing core label(s): attention; bump the ceremony pin, then re-dispatch workflow_dispatch to bootstrap the taxonomy" \
+  "$(missing_core_labels_warning "$core_rows" "$(grep -vxF attention <<<"$core_names")")"
+expect "three missing core labels are named in table order" \
+  "::warning::labels: missing core label(s): offsite, needs-ruling, attention; bump the ceremony pin, then re-dispatch workflow_dispatch to bootstrap the taxonomy" \
+  "$(missing_core_labels_warning "$core_rows" "$(grep -vxF -e offsite -e needs-ruling -e attention <<<"$core_names")")"
+expect "an unreadable empty label set does not report the taxonomy missing" "" \
+  "$(missing_core_labels_warning "$core_rows" "")"
+expect "unrelated scope labels do not affect a complete core taxonomy" "" \
+  "$(missing_core_labels_warning "$core_rows" "$core_names
+scope:consumer-one
+scope:consumer-two")"
+
 # -- drafts are building, whoever is requested --------------------------------
 DRAFT=true HEAD_SHA=head1 REQUESTED="" REVIEWS_JSON='[]'
 expect "draft PR is building" state:building "$(decide_state)"
