@@ -60,9 +60,39 @@ run() { # every mutation goes through here — DRY_RUN=1 logs instead of doing
   if [ -n "${DRY_RUN:-}" ]; then log "DRY_RUN: $*"; else "$@"; fi
 }
 
-blind_sweep_warning() { # $1 = unreadable PRs, $2 = all open PRs
+blind_sweep_warning() { # $1 = unreadable PRs, $2 = all open PRs, $3 = sampled read-failure reason
+  # Report, do not diagnose (#101 D5). The old text asserted the caller's
+  # checks:/statuses: grants as THE cause — an inference #95 made from a
+  # control case, and the merged consumer-side fix (incubator#48/PR #49)
+  # left the symptom standing while the run emitting this warning held the
+  # evidence that would have said so. Lead with what gh actually said this
+  # sweep; the permissions hint stays, demoted to one named candidate.
   if [ "$2" -gt 0 ] && [ "$1" -eq "$2" ]; then
-    echo "::warning::labels: every open PR was unreadable; grant checks: read and statuses: read in the caller (private repos do not imply them)"
+    local reason="${3:-}"
+    if [ -n "$reason" ]; then
+      echo "::warning::labels: every open PR was unreadable; sampled reason: $reason — one candidate is missing checks: read and statuses: read in the caller (private repos do not imply them)"
+    else
+      echo "::warning::labels: every open PR was unreadable; no reason was captured — one candidate is missing checks: read and statuses: read in the caller (private repos do not imply them)"
+    fi
+  fi
+}
+
+read_failure_reason() { # $1 = captured stderr → one bounded line; pure (#101)
+  # Verbatim, collapsed, bounded (D3): gh emits multi-line errors and GraphQL
+  # blobs. Collapsed so the reason is exactly one log line — a raw newline
+  # inside the captured per-PR output block could collide with a matched
+  # string — and truncated because an unbounded paste per PR per sweep is
+  # noise, and annotations are capped anyway.
+  local reason
+  reason="$(printf '%s' "${1-}" | tr '\n' ' ')"
+  if [ -z "$reason" ]; then
+    # Empty stderr is itself a fact (D4): a read that failed silently is a
+    # different observation from a denial, and must not read as one.
+    echo "no error output"
+  elif [ "${#reason}" -gt 300 ]; then
+    printf '%s…\n' "${reason:0:300}"
+  else
+    printf '%s\n' "$reason"
   fi
 }
 
@@ -598,7 +628,7 @@ main() {
   REPO_LABELS="$(gh label list -R "$REPO" --limit 200 --json name --jq '.[].name' 2>/dev/null || echo "")"
   [ -z "$REPO_LABELS" ] && log "WARNING: could not read the label set — applying labels unfiltered"
 
-  local n output status total=0 unreadable=0
+  local n output status total=0 unreadable=0 sampled_reason=""
   while IFS= read -r n; do
     [ -n "$n" ] || continue
     total=$((total + 1))
@@ -622,14 +652,28 @@ main() {
       # Failure to read them is NOT fatal and NOT treated as broken — an API
       # hiccup must never flap every PR into needs-rebase, so both degrade to
       # the "do not know" value that triggers nothing.
-      GH_VIEW="$(gh pr view "$n" -R "$REPO" --json mergeable,statusCheckRollup 2>/dev/null || echo '{}')"
+      # The WHY goes to gh's stderr, and 2>/dev/null threw it away — a
+      # permanent denial and a network hiccup left byte-identical evidence,
+      # and #95 had to infer a cause from a control case instead of reading
+      # it off a run (wrongly, it turned out). Captured into a file (#101
+      # D2), never left to interleave raw into the per-PR output block,
+      # where an unlucky line could collide with a matched string.
+      GH_VIEW_ERR_FILE="$(mktemp)"
+      GH_VIEW="$(gh pr view "$n" -R "$REPO" --json mergeable,statusCheckRollup 2>"$GH_VIEW_ERR_FILE" || echo '{}')"
+      GH_VIEW_ERR="$(cat "$GH_VIEW_ERR_FILE")"
+      rm -f "$GH_VIEW_ERR_FILE"
       MERGEABLE="$(jq -r '.mergeable // "UNKNOWN"' <<<"$GH_VIEW")"
       CHECKS="$(checks_state <<<"$GH_VIEW")"
       # Read failed: leave this PR exactly as it is. Recomputing on facts we
       # did not read is how an API hiccup turns into a false "merge me" —
       # and the next tick is 15 minutes away, not 15 hours.
       if [ "$CHECKS" = UNREADABLE ]; then
+        # Two lines on purpose (#101 D1): the sweep detects a wholly blind
+        # pass by whole-line-matching the counted line below, so the reason
+        # rides its OWN line — folding it in would silently break the
+        # `unreadable` counter and the wholly-blind warning #96 landed.
         log "#$n: could not read mergeability/checks — left alone this pass"
+        log "#$n: read failed: $(read_failure_reason "$GH_VIEW_ERR")"
         exit 0
       fi
       reconcile_pr "$n"
@@ -638,11 +682,15 @@ main() {
     [ -n "$output" ] && printf '%s\n' "$output"
     if grep -qxF "labels: #$n: could not read mergeability/checks — left alone this pass" <<<"$output"; then
       unreadable=$((unreadable + 1))
+      # the first observed reason stands in for the sweep in the blind warning
+      if [ -z "$sampled_reason" ]; then
+        sampled_reason="$(sed -n "s/^labels: #$n: read failed: //p" <<<"$output" | head -n1)"
+      fi
     elif [ "$status" -ne 0 ]; then
       log "#$n: reconcile failed — continuing with the remaining PRs"
     fi
   done < <(gh pr list -R "$REPO" --state open --limit 100 --json number --jq '.[].number')
-  blind_sweep_warning "$unreadable" "$total"
+  blind_sweep_warning "$unreadable" "$total" "$sampled_reason"
   log "reconciled."
 }
 
