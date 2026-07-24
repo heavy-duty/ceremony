@@ -10,8 +10,21 @@ drill is where they run live *before* a version rests on them.
 
 ## The rehearsal
 
-1. Create a scratch **private** repo. It is disposable by design — it gets
-   deleted at the end.
+1. Create a scratch **private** repo. It is disposable by design — but the
+   disposal is split, because the builder cannot perform the delete: at the
+   end the builder **archives** it (`PATCH /repos/{owner}/{repo}` with
+   `archived: true`, inside the `repo` scope every fleet identity holds),
+   and **deleting it is the operator's step** — `delete_repo` is
+   deliberately absent from bot tokens, fleet doctrine and not a
+   misconfiguration, so no builder that will ever run a drill can do it.
+   Do not retry the delete and do not wait on it: both 0.2.0 drills ended
+   at that wall independently (#135) — one builder held its release draft
+   in `state:building` re-trying a 403 that cannot succeed, the other wrote
+   a record asserting a delete that had not happened. **Cleanup gates
+   nothing** — not ready-for-review, not the review panel, not the merge.
+   The archived leftover is safe to leave: private, no consumers, and
+   outside `heavy-duty/ceremony`'s ref namespace — the namespace the
+   "never a branch named like the tag" rule below protects.
 2. Install the docs/CONSUMERS.md caller stubs, pinned to a fork ref carrying
    the release candidate tree. The candidate's `CEREMONY_SELF_REF` is by
    construction the tag this release has not created yet, so the consumer
@@ -44,8 +57,14 @@ drill is where they run live *before* a version rests on them.
 
 One file per version, `drills/X.Y.Z.md` — the shape the siblings use: what
 was run, where, the result of each probe, failures written down plainly. The
-record is the evidence; the scratch repo is the evidence's scaffolding and
-is deleted afterwards.
+record is the evidence; the scratch repo is the evidence's scaffolding. The
+record names the scratch repo by full `owner/name` and states its disposal
+state **as its author observed it when the record was written** — archived
+and pending the operator's delete, or deleted only if the author genuinely
+performed the delete. Never a disposal the author did not observe: the
+record is the only thing that survives the drill, and 0.2.0's record shipped
+its first draft asserting a cleanup that had not happened (#135) — false
+evidence in the one file whose job is to be evidence.
 
 `actions/drill-recorded` refuses any bare-version tree whose record is
 missing or blank. A waived drill is still a record: the file says WAIVED and
