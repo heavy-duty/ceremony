@@ -391,6 +391,25 @@ check "fragment mode quotes malformed-fragment diagnosis and file" 1 \
   "fragment 'changelog.d/notes.md' is not named for its issue" \
   in_tree fragments-bad-name
 
+fragment_tree fragments-overlong 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+{
+  printf -- '- '
+  awk 'BEGIN { printf "%0301d", 0 }'
+  printf '\n'
+} >"$TMP/fragments-overlong/changelog.d/167.md"
+check "fragment mode refuses a 301-character entry with the complete diagnosis" 1 \
+  "fragment 'changelog.d/167.md' has an overlong entry" \
+  in_tree fragments-overlong
+check "fragment mode names the measured length, bound, and split fix" 1 \
+  "301 characters, bound 300 — split it into multiple '- ' entries in this same fragment" \
+  in_tree fragments-overlong
+
 fragment_tree fragments-dangling-group 1.2.4-dev <<'EOF'
 # Changelog
 
