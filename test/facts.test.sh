@@ -146,6 +146,42 @@ adoptb_head="$(commit adoption-bare VERSION 0.1.0)"
 check "absent-at-base with a bare head still asks for the label" 0 "labeled=yes" \
   facts_in adoption-bare VERSION_SOURCE=file MERGE_SHA="$adoptb_head" EVENT_BEFORE="$adoptb_base" GH_STUB=labeled-yes
 
+# --- a root commit: no base tree at all (the repository's first push) --------
+
+# The first push to main IS a branch-create push (event.before all-zeros)
+# whose head has no first parent — there is no base, and the honest fact is
+# "(none)", not an exit-128 death at rev-parse. Both 0.2.0 drills hit the
+# death independently (#134). The -dev row consults no API (stub default),
+# which also asserts the no-base path runs no base fetch/show at all.
+repo greenfield
+green_head="$(commit greenfield VERSION 0.1.0-dev)"
+
+check "root commit, all-zeros event.before: base_ver=(none)" 0 "base_ver=(none)" \
+  facts_in greenfield VERSION_SOURCE=file MERGE_SHA="$green_head" EVENT_BEFORE="$ZEROS"
+check "root commit, empty event.before: base_ver=(none)" 0 "base_ver=(none)" \
+  facts_in greenfield VERSION_SOURCE=file MERGE_SHA="$green_head" EVENT_BEFORE=
+
+repo greenfield-bare
+greenb_head="$(commit greenfield-bare VERSION 0.1.0)"
+check "bare root commit still establishes labeled, so decide can refuse" 0 "labeled=no" \
+  facts_in greenfield-bare VERSION_SOURCE=file MERGE_SHA="$greenb_head" EVENT_BEFORE="$ZEROS" GH_STUB=labeled-no
+
+# The D2 pin: "no first parent" is detected, never inferred from a failed
+# command — an unresolvable MERGE_SHA is a loud death, not "(none)". A
+# `|| true` around the fallback would pass every case above and fail here.
+BAD_SHA="1111111111111111111111111111111111111111"
+check "an unresolvable MERGE_SHA still dies loudly" 128 "bad object" \
+  facts_in greenfield VERSION_SOURCE=file MERGE_SHA="$BAD_SHA" EVENT_BEFORE="$ZEROS"
+bad_out="$(facts_in greenfield VERSION_SOURCE=file MERGE_SHA="$BAD_SHA" EVENT_BEFORE="$ZEROS" 2>&1)"
+if printf '%s' "$bad_out" | grep -qF "base_ver=(none)"; then
+  echo "FAIL: an unresolvable MERGE_SHA must not be reported as base_ver=(none)"
+  printf '%s\n' "$bad_out" | sed 's/^/    /'
+  FAIL=$((FAIL + 1))
+else
+  echo "ok: an unresolvable MERGE_SHA is not reported as base_ver=(none)"
+  PASS=$((PASS + 1))
+fi
+
 # --- the package-json backend ------------------------------------------------
 
 repo pkg

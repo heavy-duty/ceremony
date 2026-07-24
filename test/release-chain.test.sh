@@ -69,12 +69,14 @@ git -C "$TMP/repo" add VERSION CHANGELOG.md
 git -C "$TMP/repo" commit -qm "release: 0.7.0"
 MERGE_SHA="$(git -C "$TMP/repo" rev-parse HEAD)"
 
-# chain <merge_sha> <event_before> — facts, then decide fed from facts'
-# output lines, then the notes extraction, printing each stage's result.
+# chain <merge_sha> <event_before> [repo_dir] [stub_dir] — facts, then
+# decide fed from facts' output lines, then the notes extraction, printing
+# each stage's result. The optional dirs default to the main fixture; the
+# greenfield cases below (#134) bring their own repo and stub.
 chain() {
   (
-    cd "$TMP/repo" || exit 1
-    facts_out="$(env PATH="$TMP/stub:$PATH" GITHUB_REPOSITORY=fixture/fixture \
+    cd "${3:-$TMP/repo}" || exit 1
+    facts_out="$(env PATH="${4:-$TMP/stub}:$PATH" GITHUB_REPOSITORY=fixture/fixture \
       GH_TOKEN=stub VERSION_SOURCE=file MERGE_SHA="$1" EVENT_BEFORE="$2" \
       bash "$FACTS")" || exit 1
     printf '%s\n' "$facts_out"
@@ -149,5 +151,52 @@ check "the post-release bump decides ceremony=no" 0 "ceremony=no" \
   chain "$BUMP_SHA" "$WORK_SHA"
 check "an ordinary -dev merge decides ceremony=no" 0 "ceremony=no" \
   chain "$WORK2_SHA" "$BUMP_SHA"
+
+# --- the repository's first push to main: a root commit, no base (#134) ------
+
+# event.before is all-zeros and the head has no first parent. facts reads
+# base_ver=(none) instead of dying at rev-parse, and decide's table governs
+# from there: the guided bootstrap (-dev first commit, what CONSUMERS.md
+# tells a new repo to write) is a green NOTICE no-op — the doctrine's
+# promise held at the exact moment a consumer adopts the ceremony.
+ZEROS="0000000000000000000000000000000000000000"
+
+git init -q "$TMP/greenfield"
+git -C "$TMP/greenfield" config user.email fixture@example.invalid
+git -C "$TMP/greenfield" config user.name fixture
+printf '0.1.0-dev\n' >"$TMP/greenfield/VERSION"
+git -C "$TMP/greenfield" add VERSION
+git -C "$TMP/greenfield" commit -qm "root: adopt the ceremony at 0.1.0-dev"
+GREEN_SHA="$(git -C "$TMP/greenfield" rev-parse HEAD)"
+
+check "a greenfield -dev root commit decides ceremony=no, not a red run" 0 "ceremony=no" \
+  chain "$GREEN_SHA" "$ZEROS" "$TMP/greenfield"
+check "the greenfield no-op is a NOTICE" 0 "NOTICE:" \
+  chain "$GREEN_SHA" "$ZEROS" "$TMP/greenfield"
+
+# A bare first commit with no merged release-labeled PR must still refuse —
+# the reason the crash could not be `|| true`-ed away: a greenfield adoption
+# must never become a silent release. This stub answers the labeled query
+# with false.
+mkdir -p "$TMP/stub-unlabeled"
+cat >"$TMP/stub-unlabeled/gh" <<'EOF'
+#!/usr/bin/env bash
+if [ "$1" = api ]; then echo false; exit 0; fi
+echo "gh stub: unexpected call: gh $*" >&2
+exit 97
+EOF
+chmod +x "$TMP/stub-unlabeled/gh"
+
+git init -q "$TMP/greenfield-bare"
+git -C "$TMP/greenfield-bare" config user.email fixture@example.invalid
+git -C "$TMP/greenfield-bare" config user.name fixture
+printf '0.1.0\n' >"$TMP/greenfield-bare/VERSION"
+git -C "$TMP/greenfield-bare" add VERSION
+git -C "$TMP/greenfield-bare" commit -qm "root: bare 0.1.0, nobody declared a release"
+GREENB_SHA="$(git -C "$TMP/greenfield-bare" rev-parse HEAD)"
+
+check "a bare unlabeled root commit still refuses, creating nothing" 1 \
+  "no merged, release-labeled PR" \
+  chain "$GREENB_SHA" "$ZEROS" "$TMP/greenfield-bare" "$TMP/stub-unlabeled"
 
 summary
