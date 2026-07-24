@@ -98,6 +98,15 @@ EOF
   check "parse: ceremony's own labeler.yml" 0 \
     "scope:labels${TAB}.github/labeler.yml" parses "$ROOT/.github/labeler.yml"
 
+  # the real mapping covers this implementation's own surface (#133 round):
+  # a PR touching only labels-scope must still derive scope:labels, like
+  # the neighboring labels-reconcile rows already did
+  real_rows="$(parses "$ROOT/.github/labeler.yml")"
+  check "derive: the real mapping labels a labels-scope-only change" 0 \
+    "scope:labels" derive_labels "$real_rows" 'actions/labels-scope/labels-scope.sh'
+  check "derive: the real mapping labels this test file" 0 \
+    "scope:labels" derive_labels "$real_rows" 'test/labels-scope.test.sh'
+
   # refusals: unsupported shapes fail loudly, naming the label
   cat >"$TMP/allglobs.yml" <<'EOF'
 scope:x:
