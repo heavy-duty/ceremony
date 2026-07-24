@@ -26,8 +26,10 @@ drill is where they run live *before* a version rests on them.
    carrying the candidate tree with `CEREMONY_SELF_REF` rewritten to the
    candidate SHA in every pin carrier, and records that one-line deviation
    in its record. From the second release on, this paragraph is moot.
-3. Give it a fixture `VERSION` / `CHANGELOG.md` / `drills/` in the armed
-   state (`X.Y.Z-dev`, `## Unreleased` on top).
+3. Give it a fixture `VERSION` / `CHANGELOG.md` / `changelog.d/` /
+   `drills/` in the armed state (`X.Y.Z-dev`, the fragments directory with
+   its `README.md` marker plus at least one fragment for the ceremony to
+   consume).
 4. Exercise both doors, one probe at a time:
 
    1. a merge-door ceremony publishes exactly one release and re-arms main

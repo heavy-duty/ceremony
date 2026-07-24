@@ -48,19 +48,23 @@ the machinery at all:
    [lib/decide.sh](../lib/decide.sh#L70-L74)). Bootstrapping at `-dev`
    keeps the repo clear of it entirely. (`package-json` backend: the
    `version` field, same rule.)
-2. **An armed `CHANGELOG.md`**: a preamble plus an empty `## Unreleased`
-   section for the first entries to land under. If the repo groups entries,
-   seed the shape the ceremony PR will restore at every re-arm:
+2. **An armed changelog: a `CHANGELOG.md` preamble plus `changelog.d/`.**
+   The changelog file starts as preamble only — no section; the first
+   release writes the first one. The fragments directory beside it is the
+   arming (#112): it carries a `README.md` marker naming the assembler and
+   the doctrine — take ceremony's own
+   [changelog.d/README.md](../changelog.d/README.md) at the pin — which is
+   what keeps the directory tracked while it holds no fragments and what
+   `changelog-armed` asserts. Every behavior-change PR then writes
+   `changelog.d/<issue>.md` ([The changelog rule](#the-changelog-rule));
+   the release PR assembles the section
+   ([Assembling a release section](#assembling-a-release-section)).
 
-   ```markdown
-   ## Unreleased
-
-   ### Added
-
-   ### Changed
-
-   ### Fixed
-   ```
+   Fragment mode is **unreleased** and not in `0.1.0`. A consumer pinned
+   to `0.1.0` bootstraps the legacy shape instead — the preamble plus an
+   empty `## Unreleased` section for entries to land under — and converts
+   on the pin bump to the first tag carrying fragment mode; never mix
+   refs to adopt it early.
 3. **`drills/README.md`** defining what a drill *means* in this repo —
    each repo names its own
    ([the drill doctrine](../README.md#the-drill-doctrine)). Plain
@@ -73,13 +77,19 @@ the machinery at all:
    ```yaml
        - uses: actions/checkout@v4
          with:
-           # changelog-monotonic compares HEAD against the merge base; a
-           # checkout that cannot resolve it is a hard failure in CI, not
-           # a skip (a guard that can quietly stop guarding is the failure
-           # shape these checks exist to refuse).
+           # changelog-monotonic and changelog-assembled compare HEAD
+           # against the merge base; a checkout that cannot resolve it is
+           # a hard failure in CI, not a skip (a guard that can quietly
+           # stop guarding is the failure shape these checks exist to
+           # refuse).
            fetch-depth: 0
        - uses: heavy-duty/ceremony/actions/changelog-armed@<pinned-tag>
        - uses: heavy-duty/ceremony/actions/changelog-monotonic@<pinned-tag>
+       # Unreleased: changelog-assembled is not in 0.1.0. Adopt this step
+       # with the pin bump to the first tag that carries it; never mix
+       # refs. Green NOTICE on every non-release PR; on a release PR it
+       # asserts the stamped section is exactly the fragments it consumed.
+       - uses: heavy-duty/ceremony/actions/changelog-assembled@<pinned-tag>
        - uses: heavy-duty/ceremony/actions/drill-recorded@<pinned-tag>
        # Unreleased: runner-isolated is not in 0.1.0. Adopt this step with
        # the pin bump to the first tag that carries it; never mix refs.
@@ -105,8 +115,9 @@ the machinery at all:
    here until a release tag ships it. If an action does not exist at the
    consumer's pinned tag, adopt it with the pin bump to the first tag that
    carries it; never mix a moving or newer ref into an otherwise exact-pin
-   consumer. In particular, `0.1.0` carries the three release guards above
-   plus `docs-sync`, but not `runner-isolated`.
+   consumer. In particular, `0.1.0` carries `changelog-armed`,
+   `changelog-monotonic` and `drill-recorded` plus `docs-sync`, but not
+   `changelog-assembled` or `runner-isolated`.
 6. **Labels automation** (optional but recommended): the caller from
    [Labels automation](#labels-automation), plus `.github/labels.conf`
    (panel + the repo's `scope:*` rows) and `.github/labeler.yml` (the
@@ -116,8 +127,8 @@ the machinery at all:
    per [The artifact hook](#the-artifact-hook). No hook → the source
    tarball is the package.
 
-From there the flow is the doctrine: ordinary PRs add their changelog
-line, the ceremony PR makes
+From there the flow is the doctrine: ordinary PRs write their fragment,
+the ceremony PR makes
 [the three stamps](../README.md#what-a-release-is), a human merges, the
 machine transcribes.
 
@@ -143,6 +154,18 @@ precisely so the machinery is safe to work on
       the `panel=` roster line and the repo's `scope:*` rows
       ([the format](#labels-automation)). `.github/labeler.yml` stays as
       it is (path globs are inherently repo-specific).
+- [ ] Convert the changelog to fragments (requires a pin at the first tag
+      carrying fragment mode — not `0.1.0`): move every entry under
+      `## Unreleased` to `changelog.d/<issue>.md`, verbatim — the filename
+      is derivable from the entry's own `(#N)`; an entry citing several
+      issues goes to the file for the first cited — delete the
+      `## Unreleased` heading, and add the `changelog.d/README.md` marker
+      ([bootstrap step 2](#bootstrap-a-new-repo)). Published sections stay
+      byte-identical; `changelog-monotonic` proves that on the conversion
+      PR, and `changelog-armed` refuses a surviving `## Unreleased` the
+      moment the directory exists. Rewrite the repo's own contributor
+      docs that say "add a line under `## Unreleased`" in the same PR —
+      split either way, main lies for as long as the split lasts.
 - [ ] Delete the now-shadowed copies — zero shared scripts remain:
       `.github/scripts/release-notes.sh` (box, cast) or
       `release-lib.sh` (rig), `changelog-armed.sh` (box),
@@ -170,7 +193,7 @@ precisely so the machinery is safe to work on
       changelog house style if it differs from
       [the portable rule](#the-changelog-rule).
 - [ ] What stays, per repo, forever: `VERSION` (or the `package.json`
-      version), `CHANGELOG.md`, `drills/`, `.github/labeler.yml`,
+      version), `CHANGELOG.md`, `changelog.d/`, `drills/`, `.github/labeler.yml`,
       `.github/labels.conf`, the optional
       `.github/actions/release-artifact/` — the full kept-vs-moved table
       is in [#1](https://github.com/heavy-duty/ceremony/issues/1).
@@ -395,25 +418,58 @@ Bumping the pin re-syncs the mirror in the same PR —
 The portable version of the family's contributor rule — the repo's own
 CONTRIBUTING may sharpen it, but this is the floor the guards assume:
 
-- **Every PR that changes behavior adds one line** under `## Unreleased`.
-- **Grouped changelogs keep three standing headings:** `### Added`,
-  `### Changed`, and `### Fixed`. The ceremony PR's hand-edited re-arm seeds
-  all three; append under one instead of creating a heading at the top
-  anchor. Create `Deprecated`, `Removed`, or `Security` only when a change
-  genuinely needs that rarer kind.
-- **Insert above the heading below — never type over it.** Replacing a
-  shipped `## X.Y.Z` heading with your entry deletes that release's
-  section, silently; this exact edit is why the
-  [monotonic guard](../README.md#changelog-monotonic--shipped-headings-are-append-only)
-  exists (box#122).
+- **Every PR that changes behavior writes one fragment**:
+  `changelog.d/<issue>.md`, named for the authorizing issue —
+  `<repo>-<issue>.md` for cross-repo work carrying `Part of <repo>#N` —
+  so the name is known at claim time and two builders can only collide by
+  working the same issue (#112 D2). Never an edit to `CHANGELOG.md`: the
+  release PR assembles the section
+  ([below](#assembling-a-release-section)).
+- **The fragment is the prose, not a description of it** (#112 D3): the
+  exact lines that will be published — no front-matter, no `## ` heading
+  (that one is the assembler's to write). `changelog-armed` refuses a
+  malformed fragment on the PR that wrote it.
+- **Grouped repos group inside the fragment**: `### Added`, `### Changed`,
+  `### Fixed` headings with bullets under them; create `Deprecated`,
+  `Removed`, or `Security` only when a change genuinely needs that rarer
+  kind. A repo is grouped or flat, never both (#112 D4). The assembler
+  merges groups in canonical order — Added, Changed, Fixed, Removed,
+  Deprecated, Security, then anything else first-seen — and inside a
+  group entries read newest issue first (#112 D5).
 - **One line: say what changed, and stop.** Lead with the surface, not
   the mechanism — "`state:needs-human` is set at handoff" beats "the
   labels workflow now also wakes on `labeled`". The why and the how
   belong in the PR body, where anyone chasing the reasoning already goes.
 - **Cite the issue or PR** — `(#141)`.
 - **Mark a breaking change** with a leading `BREAKING:`.
-- Flat changelogs remain flat; the standing-heading rule applies only when a
-  repo already groups its entries.
+- A repo not yet on fragment mode — no `changelog.d/` — keeps the legacy
+  floor until its conversion: one line under `## Unreleased`, inserted
+  **above** the heading below it, never over it (replacing a shipped
+  heading deletes that release's section silently — box#122, why the
+  [monotonic guard](../README.md#changelog-monotonic--shipped-headings-are-append-only)
+  exists), appended under a standing `### ` heading where the repo groups.
+
+## Assembling a release section
+
+The ceremony PR's changelog stamp is one command, run **by hand, never in
+CI** — the assembled section must land in the release PR's diff, where
+the panel reads it (#112 D12). A consumer runs the tool from a ceremony
+checkout at its own pin:
+
+```sh
+git clone --depth 1 --branch <pinned-tag> https://github.com/heavy-duty/ceremony /tmp/ceremony
+/tmp/ceremony/bin/changelog-assemble <X.Y.Z>
+```
+
+Run it at the repo root. It folds every `changelog.d/` fragment into a
+new `## X.Y.Z — DATE` section on top of `CHANGELOG.md` (DATE is today's
+UTC date; pass one as a second argument to choose it) and deletes the
+fragments it consumed — commit both halves together. `--check` prints the
+would-be section body without touching anything; read it before running
+the real thing. In CI, `changelog-assembled` replays the run from the
+merge base and refuses a stamp that is not byte-for-byte what the
+fragments assemble to — a mis-run hand step fails the PR, not the
+published release.
 
 ## Adopting the agent team flow
 
