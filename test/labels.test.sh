@@ -53,4 +53,12 @@ load_config "$TMP/good.conf"
 set_required_bots two
 check "PR author is recused from the required panel" 0 "one three" printf '%s\n' "${REQUIRED_BOTS[*]}"
 
+# LABELS.md is mirrored byte-identically into every governed repo, so any
+# scope enumeration it carries is true at home and false everywhere else —
+# 14 of 16 vendored rows were false across the family when this fired (#104).
+# The set lives in labels.conf and the repo's CONTRIBUTING; the mirror never
+# names it. grep -c prints the count and exits 1 when that count is 0.
+check "LABELS.md enumerates no repo's scope labels" 1 "0" \
+  grep -c 'scope:release-flow\|scope:guards\|scope:labels\|scope:docs' "$ROOT/LABELS.md"
+
 summary

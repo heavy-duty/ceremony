@@ -86,7 +86,11 @@ roster is config, not doctrine — swapping a vendor is an edit to this table
 (and to `panel=` in `.github/labels.conf` once #10 lands), nothing more.
 
 Each governed repo names its own roster in its CONTRIBUTING; this one is
-ceremony's.
+ceremony's. Its `scope:*` set is the same kind of repo-specific fact:
+ceremony's scopes are defined in [`.github/labels.conf`](.github/labels.conf)
+— one `name|color|description` row each, with PR path mapping in
+[`.github/labeler.yml`](.github/labeler.yml). The conf is the set; no prose
+table repeats it (#104).
 
 ## Code conventions
 

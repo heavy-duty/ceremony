@@ -170,15 +170,13 @@ re-arms mentions, but only the writer can declare that a move is owed (#83).
 ## Scope — which surface? (PRs and issues, any number)
 
 All scopes share one calm color, `#C5DEF5` — scopes locate, states alert. The
-set is per-repo (`.github/labels.conf`); PRs get theirs from changed paths via
-actions/labeler, issues get theirs from triage. This repo's set:
-
-| Label | Covers |
-|---|---|
-| `scope:release-flow` | the reusable release workflow, decide, the doors |
-| `scope:guards` | changelog-armed / changelog-monotonic / drill-recorded |
-| `scope:labels` | the labels workflow, reconciler, this taxonomy |
-| `scope:docs` | README doctrine, CONSUMERS.md, the role files |
+set is per-repo: PRs get theirs from changed paths via actions/labeler, issues
+get theirs from triage. This file never enumerates a set — it is mirrored
+byte-identically into every governed repo, and any list it carried would be
+true in one repo and false in the rest (#104). The set for the repo you are
+standing in lives in the two places that are true wherever you read them: its
+`.github/labels.conf` (the definitions, one `name|color|description` row per
+scope) and its own `CONTRIBUTING.md`, beside the other repo-specific facts.
 
 ## Issue types
 
