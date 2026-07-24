@@ -85,6 +85,7 @@ check "faithful flat ceremony: the section is byte-for-byte the assembly" 0 \
   "byte-for-byte" run faithful-flat base
 
 seed_flat faithful-grouped
+sed -i '/^- The shipped entry/i ### Fixed\\\n' "$TMP/faithful-grouped/CHANGELOG.md"
 printf -- '### Fixed\n\n- Fixed twenty-one.\n' >"$TMP/faithful-grouped/changelog.d/21.md"
 printf -- '### Added\n\n- Added twenty.\n\n### Docs\n\n- Docs twenty.\n' >"$TMP/faithful-grouped/changelog.d/20.md"
 rm "$TMP/faithful-grouped/changelog.d/12.md" "$TMP/faithful-grouped/changelog.d/9.md"

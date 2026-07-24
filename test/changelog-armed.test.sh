@@ -296,6 +296,66 @@ EOF
 check "fragment -dev + well-formed grouped fragment passes" 0 "fragment mode" \
   in_tree fragments-dev-grouped
 
+fragment_tree fragments-dev-mixed 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+printf '%s\n' "- Flat fragment." >"$TMP/fragments-dev-mixed/changelog.d/114.md"
+cat >"$TMP/fragments-dev-mixed/changelog.d/115.md" <<'EOF'
+### Fixed
+
+- Grouped fragment.
+EOF
+check "fragment mode refuses mixed shapes with the shared assembler diagnosis" 1 \
+  "fragment 'changelog.d/115.md' is grouped but fragment 'changelog.d/114.md' is not" \
+  in_tree fragments-dev-mixed
+
+fragment_tree fragments-dev-all-grouped-over-flat 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+cat >"$TMP/fragments-dev-all-grouped-over-flat/changelog.d/115.md" <<'EOF'
+### Fixed
+
+- Grouped fragment.
+EOF
+check "fragment mode refuses an all-grouped set over a flat published section" 1 \
+  "changelog.d/115.md' is grouped but newest published section '1.2.3'" \
+  in_tree fragments-dev-all-grouped-over-flat
+
+fragment_tree fragments-dev-flat-over-grouped 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+### Fixed
+
+- The shipped entry.
+EOF
+printf '%s\n' "- Flat fragment." >"$TMP/fragments-dev-flat-over-grouped/changelog.d/115.md"
+check "fragment mode refuses a flat set over a grouped published section" 1 \
+  "changelog.d/115.md' is flat but newest published section '1.2.3'" \
+  in_tree fragments-dev-flat-over-grouped
+
+fragment_tree fragments-dev-no-published 1.2.4-dev <<'EOF'
+# Changelog
+
+Preamble only.
+EOF
+cat >"$TMP/fragments-dev-no-published/changelog.d/115.md" <<'EOF'
+### Fixed
+
+- Grouped fragment.
+EOF
+check "fragment mode accepts a consistent set with no published section" 0 \
+  "fragment mode" in_tree fragments-dev-no-published
+
 fragment_tree fragments-unreleased 1.2.4-dev <<'EOF'
 # Changelog
 

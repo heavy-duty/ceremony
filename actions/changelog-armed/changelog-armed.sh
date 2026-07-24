@@ -96,6 +96,11 @@ if [ -d "$fragments_dir" ]; then
     fi
   done <<<"$fragments"
 
+  if ! diagnosis="$(changelog_shape_problem "$changelog" "$fragments_dir")"; then
+    printf 'changelog-armed: %s\n' "$diagnosis" >&2
+    exit 1
+  fi
+
   if version_is_dev "$ver"; then
     echo "changelog-armed: version '$ver' agrees with fragment mode ($fragments_dir)"
     exit 0

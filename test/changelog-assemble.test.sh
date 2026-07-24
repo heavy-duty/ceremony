@@ -99,8 +99,16 @@ check "flat: numeric-descending order (10.md before 9.md), cross-repo name besid
 
 # --- grouped write: canonical order, unnamed group appended ------------------
 
-tree grouped <<EOF
-$BASE_CHANGELOG
+tree grouped <<'EOF'
+# Changelog
+
+Preamble prose belongs to no section.
+
+## 0.1.0 — 2026-07-01
+
+### Fixed
+
+- The shipped entry.
 EOF
 frag grouped 21.md <<'EOF'
 ### Fixed
@@ -133,7 +141,7 @@ check "grouped: write mode assembles the same section" 0 "consumed 3 fragment" \
   in_tree grouped 0.2.0 2026-07-24
 check "grouped: the written file is exact" 0 "" \
   assert_file "$TMP/grouped/CHANGELOG.md" \
-  $'# Changelog\n\nPreamble prose belongs to no section.\n\n## 0.2.0 — 2026-07-24\n\n'"$GROUPED_BODY"$'\n\n## 0.1.0 — 2026-07-01\n\n- The shipped entry.'
+  $'# Changelog\n\nPreamble prose belongs to no section.\n\n## 0.2.0 — 2026-07-24\n\n'"$GROUPED_BODY"$'\n\n## 0.1.0 — 2026-07-01\n\n### Fixed\n\n- The shipped entry.'
 
 # --- a changelog holding only its preamble -----------------------------------
 
@@ -281,6 +289,18 @@ check "grouped + flat mixed refuses, both files named" 1 "6.md" \
 check "the mixed refusal names the flat side too" 1 "5.md" \
   in_tree mixed 0.2.0
 
+tree grouped-over-flat <<EOF
+$BASE_CHANGELOG
+EOF
+frag grouped-over-flat 6.md <<'EOF'
+### Added
+
+- Grouped six.
+EOF
+check "an all-grouped set over a flat published section refuses before assembly" 1 \
+  "fragment 'changelog.d/6.md' is grouped but newest published section '0.1.0'" \
+  in_tree grouped-over-flat 0.2.0
+
 tree already <<'EOF'
 # Changelog
 
@@ -324,8 +344,16 @@ check "--dir without a value is a usage error" 2 "usage:" in_tree flat-one 0.2.0
 
 # --- round trip: the publisher and the assembler agree by test ---------------
 
-tree round-trip <<EOF
-$BASE_CHANGELOG
+tree round-trip <<'EOF'
+# Changelog
+
+Preamble prose belongs to no section.
+
+## 0.1.0 — 2026-07-01
+
+### Fixed
+
+- The shipped entry.
 EOF
 frag round-trip 30.md <<'EOF'
 ### Added

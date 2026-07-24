@@ -149,24 +149,17 @@ changelog_fragment_problem() {
   fi
 }
 
-# changelog_assemble <dir>
+# changelog_shape_problem <changelog> <fragments-dir>
 #
-# Print the assembled section body — no '## ' line; that heading belongs to
-# the caller — for every fragment in changelog_fragments order. Assumes each
-# fragment already passed changelog_fragment_problem; the one property only
-# the whole set can show is shape: a repo is grouped or flat, never both
-# (#112 D4), because merging the shapes would silently strand ungrouped
-# bullets, so a mix prints a diagnosis naming the offending fragments and
-# returns 1. Group order is canonical (#112 D5): Added, Changed, Fixed,
-# Removed, Deprecated, Security, then any other group in first-seen order —
-# appended, never dropped. Inside a group, fragment order is preserved, and
-# a bullet's continuation lines travel with it verbatim: entries in this
-# family wrap, and reflowing someone's prose is not this tool's business.
-# An empty directory prints nothing and succeeds; refusing an empty release
-# is the caller's stance, not this function's.
-changelog_assemble() {
-  local dir="$1" nl=$'\n'
-  local fragments f grouped_in="" ungrouped_in="" chunk g seen="" ordered="" body first=1
+# Print the first reason a fragment set cannot publish and return 1; silence
+# returns 0. Shape is a set-level property (#157 D3), so this is the one
+# definition shared by the PR-time guard and the release-time assembler:
+# fragments may not mix grouped headings with ungrouped bullets, and a
+# non-empty set must match the newest published section when one exists.
+changelog_shape_problem() {
+  local changelog="$1" dir="$2"
+  local fragments f grouped_in="" ungrouped_in="" published="" published_body=""
+
   fragments="$(changelog_fragments "$dir")"
   [ -n "$fragments" ] || return 0
 
@@ -191,6 +184,57 @@ changelog_assemble() {
     return 1
   fi
 
+  if [ -f "$changelog" ]; then
+    published="$(awk '$1 == "##" && $2 != "Unreleased" { print $2; exit }' "$changelog")"
+  fi
+  [ -n "$published" ] || return 0
+
+  published_body="$(changelog_section "$changelog" "$published")"
+  if printf '%s\n' "$published_body" | grep -q '^### '; then
+    if [ -n "$ungrouped_in" ]; then
+      printf "fragment '%s' is flat but newest published section '%s' in '%s' is grouped — a repo is one shape or the other\n" \
+        "$ungrouped_in" "$published" "$changelog"
+      return 1
+    fi
+  elif [ -n "$grouped_in" ]; then
+    printf "fragment '%s' is grouped but newest published section '%s' in '%s' is flat — a repo is one shape or the other\n" \
+      "$grouped_in" "$published" "$changelog"
+    return 1
+  fi
+}
+
+# changelog_assemble <dir>
+#
+# Print the assembled section body — no '## ' line; that heading belongs to
+# the caller — for every fragment in changelog_fragments order. Assumes each
+# fragment already passed changelog_fragment_problem; the one property only
+# the whole set can show is shape: a repo is grouped or flat, never both
+# (#112 D4), because merging the shapes would silently strand ungrouped
+# bullets, so a mix prints a diagnosis naming the offending fragments and
+# returns 1. Group order is canonical (#112 D5): Added, Changed, Fixed,
+# Removed, Deprecated, Security, then any other group in first-seen order —
+# appended, never dropped. Inside a group, fragment order is preserved, and
+# a bullet's continuation lines travel with it verbatim: entries in this
+# family wrap, and reflowing someone's prose is not this tool's business.
+# An empty directory prints nothing and succeeds; refusing an empty release
+# is the caller's stance, not this function's.
+changelog_assemble() {
+  local dir="$1" nl=$'\n'
+  local fragments f grouped_in="" chunk g seen="" ordered="" body first=1 diagnosis
+  fragments="$(changelog_fragments "$dir")"
+  [ -n "$fragments" ] || return 0
+
+  if ! diagnosis="$(changelog_shape_problem "" "$dir")"; then
+    printf '%s\n' "$diagnosis"
+    return 1
+  fi
+
+  grouped_in="$(printf '%s\n' "$fragments" | while IFS= read -r f; do
+    if grep -q '^### ' "$f"; then
+      printf '%s\n' "$f"
+      break
+    fi
+  done)"
   if [ -z "$grouped_in" ]; then
     while IFS= read -r f; do
       chunk="$(awk 'body || !/^[[:space:]]*$/ { body = 1; print }' "$f")"

@@ -76,6 +76,10 @@ done
 fragments="$(changelog_fragments "$dir")"
 [ -n "$fragments" ] || refuse "zero fragments in '$dir' — a release publishes prose; refusing to publish an empty release"
 
+if ! diagnosis="$(changelog_shape_problem "$changelog" "$dir")"; then
+  refuse "$diagnosis"
+fi
+
 if ! body="$(changelog_assemble "$dir")"; then
   refuse "$body"
 fi
