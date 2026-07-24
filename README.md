@@ -21,36 +21,29 @@ stamps:
 
 1. **The version goes bare**: `X.Y.Z-dev` → `X.Y.Z`
    ([lib/version.sh](lib/version.sh)).
-2. **The changelog is stamped *and re-armed* — two edits, not one**
-   (box#108). `## Unreleased` becomes `## X.Y.Z — DATE`, and an **empty
-   `## Unreleased` goes back on top**, immediately above it. When the repo
-   groups entries, the ceremony PR seeds its three standing headings:
+2. **The changelog section is assembled — one edit, produced by the tool**
+   (#112). Entries never accumulate in `CHANGELOG.md`: each PR wrote one
+   fragment file, `changelog.d/<issue>.md`, and the ceremony PR runs
+   [bin/changelog-assemble](bin/changelog-assemble) — by hand, on purpose,
+   so the section lands in the PR's diff where the panel reads it (#112
+   D12; a consumer's exact invocation is in
+   [docs/CONSUMERS.md](docs/CONSUMERS.md#assembling-a-release-section)).
+   The tool folds every fragment into a new `## X.Y.Z — DATE` section on
+   top and deletes the fragments it consumed; the
+   [assembled guard](#changelog-assembled--the-stamp-is-exactly-the-fragments)
+   replays that run and refuses a stamp that is not byte-for-byte the
+   fragments' assembly.
 
-   ```markdown
-   ## Unreleased
-
-   ### Added
-
-   ### Changed
-
-   ### Fixed
-
-   ## 0.7.1 — 2026-07-19
-
-   ### Fixed
-   ...
-   ```
-
-   The second edit is not cosmetic and not deferrable. Between the stamp
-   and the next re-creation of that heading, main has no `## Unreleased`. A
-   PR authored *before* the release wrote its entry under that heading;
-   with the heading gone, git lands the entry under whatever now occupies
-   the position — **the section that just shipped** — and it merges
-   cleanly, no conflict, no signal. The changelog then credits a released
-   version with a change it does not contain, and nothing but a human
-   reading the file will ever say so (box#108; confirmed cross-repo as
-   rig#66). The [armed guard](#changelog-armed--main-never-sits-disarmed)
-   exists because of exactly this edit.
+   There is no second edit: the old stamp *re-armed* — put an empty
+   `## Unreleased` back on top — because every PR inserted at that one
+   shared anchor, and between the stamp and the re-arm a PR authored
+   *before* the release landed its entry under whatever now occupied the
+   position — **the section that just shipped** — cleanly, no conflict,
+   no signal (box#108; confirmed cross-repo as rig#66). Fragments make
+   that failure structurally impossible rather than guarded-against: a
+   fragment merged after the release simply sits in the directory and is
+   assembled into the *next* section. There is no anchor left to misplace,
+   and nothing to re-arm — the directory is always armed.
 
 3. **The drill record is present**: `drills/X.Y.Z.md`, non-blank — the
    evidence the release rests on
@@ -70,7 +63,8 @@ the version's own changelog section as the body — the curated prose, never
 the generated PR list
 ([lib/changelog.sh](lib/changelog.sh) is the one canonical extractor) —
 and re-arms main by bumping to `X.Y.(Z+1)-dev`
-([release.yml](.github/workflows/release.yml#L266-L300)). The machine does
+([release.yml](.github/workflows/release.yml#L266-L300)) — the version is
+the only re-arm left; the changelog needs none (#112). The machine does
 the transcription because humans err silently and machines fail loudly:
 **everything asserts its way to certainty and fails loudly, creating
 nothing** — a wrong release is worse than a missing one, so every failed
@@ -129,7 +123,7 @@ refuse (#1 constraint 8).
 
 ## The guards
 
-Three composite actions run in every consumer's CI (and in this repo's
+Four composite actions run in every consumer's CI (and in this repo's
 own). Shared shape: version-keyed where the tree's state matters, loud
 where it fails, and **a file of its own so a test can drive it**. The full
 war stories are in the scripts' header comments — authoritative and longer
@@ -137,8 +131,28 @@ than this; what follows is the operator's cut.
 
 ### changelog-armed — main never sits disarmed
 
-**The rule** ([actions/changelog-armed/changelog-armed.sh](actions/changelog-armed/changelog-armed.sh#L27-L36)),
-keyed on the tree's version:
+**The rule** ([actions/changelog-armed/changelog-armed.sh](actions/changelog-armed/changelog-armed.sh)),
+keyed on the tree's shape, then its version. In **fragment mode** —
+`changelog.d/` exists, the arming property moved onto the directory
+(#112 D7):
+
+- always → the marker `changelog.d/README.md` must exist (what keeps the
+  directory tracked when it holds no fragments), no `## Unreleased`
+  section may survive in `CHANGELOG.md` (a second anchor with no owner),
+  and every fragment must be publishable on its own — named `<issue>.md`
+  or `<repo>-<issue>.md`, no `## ` heading, at least one bullet, no
+  `### ` heading without an entry. A malformed fragment fails the PR that
+  wrote it, not the release that consumes it (#112 D9).
+- `-dev` tree → nothing more. The directory **is** the arming: the next
+  PR's entry is a new file, and a new file always has somewhere to land.
+- bare tree (the ceremony PR and its merge) → every fragment must be
+  consumed, and the top section must be the stamped, publishable section
+  for exactly that version. Fragment mode has no re-armed shape — there
+  is nothing left to re-arm.
+
+In **legacy mode** — no `changelog.d/` — the version-keyed rules stand
+verbatim; both shapes stay supported so a consumer adopts fragments on a
+pin bump, on its own schedule (#112 D8):
 
 - `-dev` tree → the top section **must** be `## Unreleased`.
 - bare tree (the ceremony PR and its merge) → the top section may be
@@ -152,10 +166,12 @@ keyed on the tree's version:
   uses, so the two cannot disagree about what a section is).
 
 **The incident**: box#108 / rig#66 — the silent mislanding described
-[above](#what-a-release-is). **Red means** a PR entry has nowhere safe to
-land, or a stamped version would publish no entries or a dangling grouped
-heading; **the fix** is to re-arm the top or delete/populate the named
-heading before publishing.
+[above](#what-a-release-is). Fragment mode retires the incident's
+mechanism outright; legacy mode guards it. **Red means** a PR entry has
+nowhere safe to land — a missing marker, a surviving `## Unreleased`, a
+malformed fragment — or a stamped version would publish no entries, a
+dangling grouped heading, or fewer fragments than it consumed; the
+message names the fix in every case.
 
 **Do not "simplify" this to "always require `## Unreleased`".** The
 unconditional form is false by construction on the ceremony PR's own tree
@@ -164,12 +180,36 @@ to revert exactly that
 ([the script's header](actions/changelog-armed/changelog-armed.sh#L8-L16)).
 The version-keyed form is what rig and cast get back by adopting this repo.
 
-One consequence worth knowing before it happens: a ceremony PR that stamps
-and forgets to re-arm still passes this guard — a bare tree is allowed to
-be stamped. It goes red **the moment the automatic `-dev` bump lands on
-main** ([the script](actions/changelog-armed/changelog-armed.sh#L37-L42)).
-The guard does not block the release; it refuses to let main *sit*
-disarmed, which is the window a late PR falls into.
+One consequence worth knowing before it happens, legacy mode only: a
+ceremony PR that stamps and forgets to re-arm still passes this guard — a
+bare tree is allowed to be stamped. It goes red **the moment the automatic
+`-dev` bump lands on main**. The guard does not block the release; it
+refuses to let main *sit* disarmed, which is the window a late PR falls
+into. Fragment mode has no such window: with no re-arm step there is
+nothing to forget.
+
+### changelog-assembled — the stamp is exactly the fragments
+
+**The rule**
+([actions/changelog-assembled/changelog-assembled.sh](actions/changelog-assembled/changelog-assembled.sh)):
+on a release PR in fragment mode, the stamped `## X.Y.Z` section must be
+**byte-for-byte** what the fragments it consumed assemble to. The guard
+reads the fragments as of the merge base (they are gone from HEAD — that
+is the point of the ceremony), replays `changelog-assemble --check` over
+that set, and diffs the result against HEAD's section body. Every tree it
+does not apply to — a `-dev` tree, legacy mode, no consumed fragments —
+passes with a green `NOTICE`, so a non-ceremony PR is never red here.
+
+**The failure it catches** (#116): assembly is a hand-run step by design —
+the section must land in the PR's diff where the panel reads it (#112 D12)
+— and a mis-run hand step leaves no trace. Drop one fragment from the
+deletion and its entry is simply absent from the release: armed is green,
+monotonic is green, and the publisher happily publishes the shortened
+section. Hand-edit one word of the assembled prose and the published
+history quietly stops being what the authors wrote. The replay is what
+makes a hand-run step safe. **This guard needs history** — same stance as
+the monotonic guard: `fetch-depth: 0`, and in CI an unresolvable base is a
+hard failure, not a skip.
 
 ### changelog-monotonic — shipped headings are append-only
 
@@ -180,9 +220,12 @@ the set at the merge base, and no heading may appear twice on HEAD. The
 rule needs no tuning because release headings are append-only by doctrine:
 the ceremony adds one and nothing ever legitimately removes one — so
 superset has no exception to carve. The ceremony's own stamp passes by
-construction: rewriting `## Unreleased` into `## X.Y.Z — DATE` adds a
-heading and removes none (`Unreleased` is not a version heading; it is
-[changelog-armed](#changelog-armed--main-never-sits-disarmed)'s business).
+construction: the assembler writes a new `## X.Y.Z — DATE` heading and
+removes none. Fragment mode changes nothing here (#112 D10): fragments add
+no `## ` heading, and `Unreleased` was never in the guard's set — it is
+not a version heading; it is
+[changelog-armed](#changelog-armed--main-never-sits-disarmed)'s business —
+which is why a repo's adoption PR can delete it and stay green.
 
 **The incidents**: box#122 (caught in review of box#118) — an author
 adding an entry under `## Unreleased` **replaced** the heading below it
@@ -357,27 +400,31 @@ open.
 [L333–L337](.github/workflows/release.yml#L333-L337). The message is the
 remedy.
 
-> CHANGELOG.md has no '## $VER' section — stamp the Unreleased section in the release PR before tagging; refusing to publish an empty release
+> CHANGELOG.md has no '## $VER' section — run changelog-assemble in the release PR before tagging; refusing to publish an empty release
 
 [L346–L349](.github/workflows/release.yml#L346-L349). The tagged tree was
-never stamped. Stamp first, then delete and re-push the tag.
+never stamped. Assemble the section
+([docs/CONSUMERS.md](docs/CONSUMERS.md#assembling-a-release-section)),
+then delete and re-push the tag.
 
 ### Red main that is not the release workflow
 
 Consumer CI runs its guard steps on pushes to main too (this repo's
 [ci.yml](.github/workflows/ci.yml) does the same). The one guard red an
-operator will actually meet on main is
-**changelog-armed after a re-arm was forgotten**: the ceremony stamped
-without putting `## Unreleased` back, the release's own `-dev` bump
-landed, and the guard now says (first line):
+operator will actually meet on main is **changelog-armed after a re-arm
+was forgotten — legacy mode only**: the ceremony stamped without putting
+`## Unreleased` back, the release's own `-dev` bump landed, and the guard
+now says (first line):
 
 > changelog-armed: the version is '$ver' (a development tree) but the top
 >   section of $changelog is: …
 
 The fix is a one-line PR: add an empty `## Unreleased` above the stamped
-section. The full message
-([the script](actions/changelog-armed/changelog-armed.sh#L87-L101))
-carries the same instruction.
+section. The full message carries the same instruction. Fragment mode has
+no re-arm to forget, so it has no equivalent red on main — its refusals
+(a missing marker, a surviving `## Unreleased`, a malformed or unconsumed
+fragment) all fire on the PR that caused them, where the author is still
+holding it.
 
 ## Design lineage
 

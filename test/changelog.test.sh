@@ -143,7 +143,7 @@ WRAPPER="$ROOT/bin/changelog-section"
 check "wrapper publishes the requested body" 0 "The seven-oh entry" "$WRAPPER" 0.7.0 "$FIXTURE"
 check "wrapper refuses an empty section" 1 "no section for '0.5.0'" "$WRAPPER" 0.5.0 "$FIXTURE"
 check "wrapper refuses an absent section" 1 "no section for '9.9.9'" "$WRAPPER" 9.9.9 "$FIXTURE"
-check "wrapper explains how the release PR fixes refusal" 1 "stamps the Unreleased section" "$WRAPPER" 9.9.9 "$FIXTURE"
+check "wrapper explains how the release PR fixes refusal" 1 "assembles the section" "$WRAPPER" 9.9.9 "$FIXTURE"
 check "wrapper refuses a heading-only version section" 1 \
   "section '1.5.0' has no entries — a heading is not an entry" \
   "$WRAPPER" 1.5.0 "$PROBLEM_FIXTURE"
