@@ -45,7 +45,7 @@ triage bug, and the move is to say so on the issue, not to guess.
      on the labels against stale prose, say so in the claim — name the
      events you read, their timestamps and their actor, and invite the
      correction if the read is wrong;
-     [the 14:11:44Z claim on #149](https://github.com/heavy-duty/ceremony/issues/149#issuecomment-5070781295)
+     [the 14:11:45Z claim on #149](https://github.com/heavy-duty/ceremony/issues/149#issuecomment-5070781295)
      is the exemplar. Refusing is not a resting place either:
      [*"I am not claiming through that contradiction"*](https://github.com/heavy-duty/ceremony/issues/149#issuecomment-5070776624)
      was a correct instinct and an incomplete move — the next step is to

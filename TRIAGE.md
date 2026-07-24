@@ -56,7 +56,7 @@ is the failure this whole flow exists to prevent.
    write that re-read only the thread races it. Both 2026-07-24 failures —
    [a header correction on #149](https://github.com/heavy-duty/ceremony/issues/149#issuecomment-5070758613)
    asserting a hold 58 seconds after its lift, and
-   [a `needs-ruling` ask on #151](https://github.com/heavy-duty/ceremony/issues/151#issuecomment-5070774657)
+   [a `needs-ruling` ask on #151](https://github.com/heavy-duty/ceremony/issues/151#issuecomment-5070768876)
    the operator's label events had answered 132 seconds earlier — are this
    sentence's absence.
    Past 24 hours from the current episode's `labeled` event, if the ruling
