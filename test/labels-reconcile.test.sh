@@ -363,13 +363,46 @@ expect "NEUTRAL and SKIPPED are not failures" SUCCESS \
 expect "a re-run supersedes the cancelled original" SUCCESS \
   "$(rollup "[$(run_ scope CANCELLED 2026-07-20T15:19:39Z),\
               $(run_ scope SUCCESS   2026-07-20T15:19:45Z)]" | checks_state)"
-expect "...and the reverse order is not a re-run passing, it is one failing" FAILURE \
+# The reverse order once pinned FAILURE — "the reverse order is not a re-run
+# passing, it is one failing". That fixture imagined a cancelled run REPLACING
+# a success; #139 recorded a cancelled run that replaced NOTHING: the
+# repo-global reconcile queue keeps one pending run per group, so a sibling
+# PR's event evicts the queued duplicate after it has already attached a
+# check to this head. A run that never executed a step said nothing about
+# these bytes — it is not a verdict, and the success beside it is. The
+# survivor decides, whatever order the two arrived in (#139).
+expect "a cancelled entry beside a success is not a verdict, the success is" SUCCESS \
   "$(rollup "[$(run_ scope SUCCESS   2026-07-20T15:19:39Z),\
               $(run_ scope CANCELLED 2026-07-20T15:19:45Z)]" | checks_state)"
 # same job name in a different workflow is a different context, not a re-run
 expect "same name in another workflow does not supersede" FAILURE \
   "$(rollup "[$(jq -n '{__typename:"CheckRun",workflowName:"labels",name:"scope",conclusion:"FAILURE",completedAt:"2026-07-20T15:00:00Z"}'),\
               $(run_ scope SUCCESS 2026-07-20T15:19:45Z)]" | checks_state)"
+
+# -- the #139 carve-out, pinned by the recorded shape that bought it. PR #136
+#    head a17e497: the reconcile succeeded 12:16:17→12:17:06, and the queued
+#    duplicate — evicted by ANOTHER PR's run in the same repo-global group —
+#    attached CANCELLED at 12:16:41, started_at == completed_at, no step ever
+#    ran. Recorded payloads, not live fetches: the heads have moved on.
+rec_() { jq -n --arg o "$1" --arg s "$2" --arg c "$3" \
+  '{__typename:"CheckRun", workflowName:"labels", name:"reconcile",
+    conclusion:$o, startedAt:$s, completedAt:$c}'; }
+expect "a queue-cancelled duplicate beside the success that did its work (a17e497)" SUCCESS \
+  "$(rollup "[$(rec_ SUCCESS   2026-07-24T12:16:17Z 2026-07-24T12:17:06Z),\
+              $(rec_ CANCELLED 2026-07-24T12:16:41Z 2026-07-24T12:16:41Z)]" | checks_state)"
+# ...but the discard needs a surviving verdict. A context that is ONLY
+# cancelled never reported at all — a killed or timed-out required job — and
+# certifying that green is the unknown-as-green shape checks_state refuses.
+expect "a context whose only entry is CANCELLED still blocks" FAILURE \
+  "$(rollup "[$(run_ b CANCELLED)]" | checks_state)"
+expect "...and so does a context of two cancelled entries" FAILURE \
+  "$(rollup "[$(rec_ CANCELLED 2026-07-24T12:16:17Z 2026-07-24T12:16:20Z),\
+              $(rec_ CANCELLED 2026-07-24T12:16:41Z 2026-07-24T12:16:41Z)]" | checks_state)"
+# ...and discarding the cancelled entry must never discard a real red: the
+# survivor rule keeps the FAILURE, it does not resurrect anything green.
+expect "a cancelled newest over an earlier FAILURE is still that failure" FAILURE \
+  "$(rollup "[$(rec_ FAILURE   2026-07-24T12:16:17Z 2026-07-24T12:17:06Z),\
+              $(rec_ CANCELLED 2026-07-24T12:16:41Z 2026-07-24T12:16:41Z)]" | checks_state)"
 
 # -- a run still IN FLIGHT. `run_()` cannot express this: it always carries a
 #    real completedAt, which is exactly why the supersede rule shipped dating

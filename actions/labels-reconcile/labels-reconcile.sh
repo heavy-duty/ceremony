@@ -204,6 +204,22 @@ checks_state() { # rollup JSON on stdin → SUCCESS | FAILURE | PENDING | NONE |
   # the exact shape of #136. The cost of being wrong is symmetric in form and
   # not in consequence: a false FAILURE parks the PR on the agent, who looks;
   # a false SUCCESS invites a human to merge a tree that will not merge.
+  #
+  # The list-what-passes rule has exactly one carve-out, and it is narrower
+  # than an outcome: a CANCELLED entry is discarded when its context holds at
+  # least one non-cancelled sibling (#139). The reconcile job queues in one
+  # repo-global concurrency group, so any repo event — a sibling PR's push,
+  # triage labelling an issue — evicts the queued duplicate AFTER it has
+  # attached a check run to this PR's head, and that cancelled entry became
+  # the context's newest word: blocker:ci-red on a PR whose real checks were
+  # all green (#133/#136, evictable only by an empty commit). A cancelled run
+  # said nothing about this head; a non-cancelled sibling is a real verdict
+  # about exactly these bytes, whatever order the two arrived in — and for
+  # this workflow the evictor performs the duplicate's work anyway, since
+  # every sweep covers every open PR. This does not widen unknown-into-green:
+  # a context whose entries are ALL cancelled never reported at all (a killed
+  # or timed-out required job), so it keeps CANCELLED and still blocks —
+  # discard needs a surviving verdict, never an empty context.
   jq -r '
     if (has("statusCheckRollup") | not) then "UNREADABLE" else
 
@@ -252,8 +268,14 @@ checks_state() { # rollup JSON on stdin → SUCCESS | FAILURE | PENDING | NONE |
                                and (startswith("0001-01-01") | not)))
                   | first // ""),
             outcome: ((.conclusion // .state // "") | ascii_upcase) } ]
+    # The #139 carve-out (header above): drop CANCELLED entries only when the
+    # context keeps a non-cancelled survivor — BEFORE the sort, so a cancelled
+    # entry that arrived newest cannot outvote the real verdict it displaced.
+    # An all-cancelled context is left intact and still classifies FAILURE.
     | group_by(.ctx)
-    | map(sort_by([(.at == ""), .at]) | last | .outcome) as $latest
+    | map( map(select(.outcome != "CANCELLED")) as $live
+           | (if ($live | length) > 0 then $live else . end)
+           | sort_by([(.at == ""), .at]) | last | .outcome ) as $latest
 
     | if   ($latest | length) == 0                            then "NONE"
       elif (($latest - $passing - $waiting) | length) > 0     then "FAILURE"
