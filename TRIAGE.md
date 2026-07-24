@@ -79,6 +79,13 @@ Every issue you mint carries, in this order:
 - **Tasks**: the steps, checkboxed, in order.
 - **Acceptance criteria**: checkboxed, verifiable, and honest — these become
   the builder's definition of done and the reviewer's review spec, verbatim.
+  A criterion that can only be checked after the merge must carry its own
+  mechanism, in the criterion itself: that it is post-merge, that triage
+  owns the close, and that the PR references the issue with `Refs #N`
+  rather than `Closes #N`. A criterion that survives the merge only if
+  someone remembers to reopen the issue is an incomplete criterion — #137's
+  amended body is the worked example, reopened by hand after `Closes #137`
+  closed it with the criterion unmet (#151).
 - **Test plan**: what proves it, including the cases that must fail.
 - **Dependencies**: `Blocked by #N` / `Blocks #N`, and `Part of #E` when an
   epic organizes it. Name a cross-repo dependency the same way with its

@@ -39,8 +39,9 @@ The same flow the sibling repos run, and the part of this pipeline that is
 already proven:
 
 1. **One issue, one PR**, opened as a **draft** while building, with
-   `Closes #N` in the body. Drafts are invisible to the reviewer panel on
-   purpose. Every behavior change writes one fragment,
+   `Closes #N` in the body — its exceptions (cross-repo work, a post-merge
+   criterion) live in [BUILDER.md](BUILDER.md). Drafts are invisible to the
+   reviewer panel on purpose. Every behavior change writes one fragment,
    `changelog.d/<issue>.md` — the exact prose to publish, nothing else
    (cross-repo work names it `<repo>-<issue>.md`; a grouped repo puts its
    `### Added` / `### Changed` / `### Fixed` headings inside the fragment).

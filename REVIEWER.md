@@ -28,8 +28,13 @@ The machine reads only your **verdict**; humans read your reasons.
 
 In order of authority:
 
-1. **The issue's acceptance criteria** — the PR's `Closes #N`, or its
-   cross-repo `Part of <owner>/<repo>#N`, names your spec. Check every
+1. **The issue's acceptance criteria** — the PR's `Closes #N`, its
+   cross-repo `Part of <owner>/<repo>#N`, or its `Refs #N` when the issue
+   body marks a criterion post-merge, names your spec. That last shape is
+   not a defect: the issue directs it, triage owns that close, and a
+   request-changes on the "missing" keyword enforces the bug the shape
+   exists to fix — `Closes #137` closed its issue with a post-merge
+   criterion unmet (#151). Check every
    criterion; a PR that ships less than the issue says is a request-changes
    even if the code is beautiful.
 2. **The repo's load-bearing constraints** — the rules bought with
