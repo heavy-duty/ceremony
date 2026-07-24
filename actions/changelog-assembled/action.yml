@@ -1,0 +1,53 @@
+name: Changelog assembled
+description: >-
+  Assert a release PR's stamped section is exactly what the changelog.d/
+  fragments it consumed assemble to — the fragments as of the MERGE BASE
+  are replayed through the assembler's --check and compared byte-for-byte
+  against the section on HEAD (#116; the fragment flow is #112). Needs the
+  HISTORY: the caller's checkout must use fetch-depth: 0, or the base ref
+  will not resolve and strict mode (the default — CI must never skip)
+  fails red with a message naming that fix. Inapplicable trees — a -dev
+  tree, a legacy repo with no fragments directory at the merge base — pass
+  with a NOTICE, never a silent skip.
+inputs:
+  base-ref:
+    description: >-
+      The ref the fragment set is read relative to. The default resolves
+      the event's base branch — the PR's target on pull_request, the
+      pushed branch itself on push (where the merge base IS HEAD and the
+      check is vacuous by construction, named honestly in the log).
+    required: false
+    default: origin/${{ github.base_ref || github.ref_name }}
+  changelog:
+    description: Path to the changelog, relative to the workspace
+    required: false
+    default: CHANGELOG.md
+  fragments-dir:
+    description: Path to the fragments directory, relative to the workspace
+    required: false
+    default: changelog.d
+  version-source:
+    description: Where the tree's version lives ("file" or "package-json")
+    required: false
+    default: file
+  strict:
+    description: >-
+      "1" (the default) makes an unresolvable base ref a hard failure
+      instead of a loud skip — a guard that can quietly stop guarding is
+      the failure shape this family of checks exists to refuse. The local
+      default in the script itself stays "0", so a plain working-copy run
+      degrades sensibly.
+    required: false
+    default: "1"
+runs:
+  using: composite
+  steps:
+    - name: changelog assembled
+      shell: bash
+      env:
+        CHANGELOG_ASSEMBLED_BASE: ${{ inputs.base-ref }}
+        CHANGELOG: ${{ inputs.changelog }}
+        CHANGELOG_ASSEMBLED_DIR: ${{ inputs.fragments-dir }}
+        VERSION_SOURCE: ${{ inputs.version-source }}
+        CHANGELOG_ASSEMBLED_STRICT: ${{ inputs.strict }}
+      run: bash "$GITHUB_ACTION_PATH/changelog-assembled.sh"
