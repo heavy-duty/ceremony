@@ -319,7 +319,10 @@ rows remain consumer-owned because paths and surfaces differ by repository.
 
 After adding the caller and configuration, run `workflow_dispatch` once to
 bootstrap labels on a fresh repository. Scheduled and PR-triggered runs only
-reconcile; they do not repeatedly upsert the taxonomy.
+reconcile; they do not repeatedly upsert the taxonomy. When a ceremony pin
+bump adds a core label, bump the pin first and then re-dispatch
+`workflow_dispatch`; the scheduled sweep warns when the pinned taxonomy
+declares a core label the repository lacks.
 
 ## Doctrine mirror
 

@@ -188,7 +188,8 @@ on a PR would say the same thing twice and drift.
 
 The labels workflow (issue #10) recomputes PR state statelessly on PR events
 plus a 15-minute advisory cron, and bootstraps this taxonomy idempotently on
-manual dispatch. The same workflow reconciles issue-flow labels on issue
-events and during the scheduled sweep. Default GitHub labels (`duplicate`, `invalid`,
-`question`, `wontfix`, `help wanted`, `good first issue`) are deleted at
-bootstrap — a `question` is a discussion, not an issue.
+manual dispatch. The sweep warns when the core taxonomy declares a label the
+repository lacks. The same workflow reconciles issue-flow labels on issue
+events and during the scheduled sweep. Default GitHub labels (`duplicate`,
+`invalid`, `question`, `wontfix`, `help wanted`, `good first issue`) are
+deleted at bootstrap — a `question` is a discussion, not an issue.
