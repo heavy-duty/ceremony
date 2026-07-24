@@ -128,6 +128,17 @@ assert_problem 1.5.0 1 "section '1.5.0' has no entries — a heading is not an e
 assert_problem 1.6.0 1 "section '1.6.0' has an empty heading: '### Added'"
 assert_problem 9.9.9 1 "no section for '9.9.9'"
 
+MISSING_UNRELEASED_FIXTURE="$TMP/CHANGELOG.missing-unreleased.md"
+cat >"$MISSING_UNRELEASED_FIXTURE" <<'EOF'
+# Changelog
+
+## 1.0.0
+
+- Released entry.
+EOF
+check "predicate: absent Unreleased still refuses" 1 "no section for 'Unreleased'" \
+  changelog_section_problem "$MISSING_UNRELEASED_FIXTURE" Unreleased
+
 WRAPPER="$ROOT/bin/changelog-section"
 check "wrapper publishes the requested body" 0 "The seven-oh entry" "$WRAPPER" 0.7.0 "$FIXTURE"
 check "wrapper refuses an empty section" 1 "no section for '0.5.0'" "$WRAPPER" 0.5.0 "$FIXTURE"
