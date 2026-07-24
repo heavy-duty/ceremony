@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# changelog-armed.sh [<changelog>] [<version-source>] — assert that the
-# changelog is ARMED: that there is a heading for the next PR's entry to
-# land under, and that it is the right one for the state this tree is in.
+# changelog-armed.sh [<changelog>] [<version-source>] [<fragments-dir>] —
+# assert that the changelog is ARMED: that there is a place for the next PR's
+# entry to land, and that it is the right one for the state this tree is in.
 #
 # Ported from box .github/scripts/changelog-armed.sh (box#108, confirmed
 # cross-repo as rig#66) — box is the only repo that carries this guard
@@ -14,6 +14,14 @@ set -euo pipefail
 # guard rig and cast regain when they adopt ceremony (#13, #15). Anyone
 # tempted to simplify this back to the unconditional form should read
 # those two reverts first.
+#
+# Fragment mode makes the directory itself the arming (#115): every PR gets
+# its own issue-named file, so the box#108 clean-mismerge cannot happen because
+# there is no shared heading to disappear under an open PR. The guard instead
+# proves that the marker exists, Unreleased is gone, and every fragment is
+# publishable before its author lets go of the PR. A bare release has no
+# re-armed shape in this mode — there is nothing to re-arm — so it must have
+# consumed every fragment and stamped its exact publishable section.
 #
 # The failure it exists to catch (box#108, rig#66) leaves no trace: the
 # ceremony PR stamps '## Unreleased' into '## X.Y.Z — DATE' by hand, and
@@ -47,6 +55,7 @@ set -euo pipefail
 
 changelog="${1:-${CHANGELOG:-CHANGELOG.md}}"
 version_source="${2:-${VERSION_SOURCE:-file}}"
+fragments_dir="${3:-${FRAGMENTS_DIR:-changelog.d}}"
 
 # The shared libs travel with this action: a consumer's
 # `uses: heavy-duty/ceremony/actions/changelog-armed@<tag>` downloads this
@@ -66,6 +75,68 @@ ver="$(version_read "$version_source")" || {
   echo "changelog-armed: cannot read the version (version-source: $version_source)" >&2
   exit 1
 }
+
+if [ -d "$fragments_dir" ]; then
+  [ -f "$fragments_dir/README.md" ] || {
+    echo "changelog-armed: fragment mode requires the generated marker '$fragments_dir/README.md' — restore it so the empty directory remains tracked" >&2
+    exit 1
+  }
+
+  if awk '$1 == "##" && $2 == "Unreleased" { found = 1 } END { exit !found }' "$changelog"; then
+    echo "changelog-armed: a '## Unreleased' section survived the adoption — move its entries into '$fragments_dir/<issue>.md' and delete the heading" >&2
+    exit 1
+  fi
+
+  fragments="$(changelog_fragments "$fragments_dir")"
+  while IFS= read -r fragment; do
+    [ -n "$fragment" ] || continue
+    if ! diagnosis="$(changelog_fragment_problem "$fragment")"; then
+      printf 'changelog-armed: %s\n' "$diagnosis" >&2
+      exit 1
+    fi
+  done <<<"$fragments"
+
+  if version_is_dev "$ver"; then
+    echo "changelog-armed: version '$ver' agrees with fragment mode ($fragments_dir)"
+    exit 0
+  fi
+
+  if [ -n "$fragments" ]; then
+    surviving="$(printf '%s\n' "$fragments" | awk '
+      BEGIN { separator = "" }
+      { printf "%s%s", separator, $0; separator = ", " }
+    ')"
+    echo "changelog-armed: these fragments were not consumed: $surviving — re-run 'changelog-assemble $ver'" >&2
+    exit 1
+  fi
+
+  top="$(grep -m1 '^## ' "$changelog" || true)"
+  [ -n "$top" ] || {
+    echo "changelog-armed: $changelog has no '## ' section at all — the release stamp for '$ver' is missing" >&2
+    exit 1
+  }
+  if ! diagnosis="$(changelog_section_problem "$changelog" "$ver")"; then
+    printf "changelog-armed: the stamped section for '%s' is not publishable: %s\n" \
+      "$ver" "$diagnosis" >&2
+    exit 1
+  fi
+  top_ver="$(printf '%s\n' "$top" | awk '{ print $2 }')"
+  if [ "$top_ver" != "$ver" ]; then
+    cat >&2 <<EOF
+changelog-armed: the version is '$ver' but the top section of $changelog is:
+
+    $top
+
+  Fragment mode has no re-arm step. A bare version means this tree is a
+  release, so the top section must be the stamped section for '$ver' itself.
+  A different version means the ceremony stamped the wrong number.
+EOF
+    exit 1
+  fi
+
+  echo "changelog-armed: version '$ver' agrees with fragment mode ($fragments_dir)"
+  exit 0
+fi
 
 # The TOP section: the first '## ' heading in the file. Everything above it is
 # the changelog's own preamble and belongs to no section.

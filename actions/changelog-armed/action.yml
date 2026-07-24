@@ -13,6 +13,10 @@ inputs:
     description: Path to the changelog, relative to the workspace
     required: false
     default: CHANGELOG.md
+  fragments-dir:
+    description: Fragment directory whose presence selects fragment mode
+    required: false
+    default: changelog.d
 runs:
   using: composite
   steps:
@@ -21,4 +25,5 @@ runs:
       env:
         CHANGELOG: ${{ inputs.changelog }}
         VERSION_SOURCE: ${{ inputs.version-source }}
+        FRAGMENTS_DIR: ${{ inputs.fragments-dir }}
       run: bash "$GITHUB_ACTION_PATH/changelog-armed.sh"

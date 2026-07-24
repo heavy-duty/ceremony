@@ -248,6 +248,159 @@ EOF
 check "package-json: bare + armed passes" 0 "agrees" \
   in_tree pkg-bare-armed CHANGELOG.md package-json
 
+# --- fragment mode: changelog.d/ is the arming -------------------------------
+
+fragment_tree() {
+  local name="$1" version="$2"
+  shift 2
+  tree "$name" "$version"
+  mkdir -p "$TMP/$name/changelog.d"
+  printf '%s\n' "# Changelog fragments" >"$TMP/$name/changelog.d/README.md"
+}
+
+fragment_tree fragments-dev-empty 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+check "fragment -dev + marker + no fragments passes" 0 "fragment mode" \
+  in_tree fragments-dev-empty
+
+fragment_tree fragments-dev-flat 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+printf '%s\n' "- Added fragment mode." >"$TMP/fragments-dev-flat/changelog.d/115.md"
+check "fragment -dev + well-formed flat fragment passes" 0 "fragment mode" \
+  in_tree fragments-dev-flat
+
+fragment_tree fragments-dev-grouped 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+### Fixed
+
+- The shipped entry.
+EOF
+cat >"$TMP/fragments-dev-grouped/changelog.d/115.md" <<'EOF'
+### Changed
+
+- Added fragment mode.
+EOF
+check "fragment -dev + well-formed grouped fragment passes" 0 "fragment mode" \
+  in_tree fragments-dev-grouped
+
+fragment_tree fragments-unreleased 1.2.4-dev <<'EOF'
+# Changelog
+
+## Unreleased
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+check "fragment mode refuses even an empty Unreleased section" 1 \
+  "Unreleased' section survived the adoption" in_tree fragments-unreleased
+
+fragment_tree fragments-no-marker 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+rm "$TMP/fragments-no-marker/changelog.d/README.md"
+check "fragment mode requires the generated marker" 1 "README.md" \
+  in_tree fragments-no-marker
+
+fragment_tree fragments-bad-name 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+printf '%s\n' "- An entry." >"$TMP/fragments-bad-name/changelog.d/notes.md"
+check "fragment mode quotes malformed-fragment diagnosis and file" 1 \
+  "fragment 'changelog.d/notes.md' is not named for its issue" \
+  in_tree fragments-bad-name
+
+fragment_tree fragments-dangling-group 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+printf '%s\n' "### Changed" >"$TMP/fragments-dangling-group/changelog.d/115.md"
+check "fragment mode refuses a dangling fragment heading" 1 \
+  "fragment 'changelog.d/115.md' has no entries" \
+  in_tree fragments-dangling-group
+
+fragment_tree fragments-bare-stamped 1.2.3 <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+
+## 1.2.2 — 2026-07-01
+
+- The older entry.
+EOF
+check "fragment bare + stamped section + consumed directory passes" 0 \
+  "fragment mode" in_tree fragments-bare-stamped
+
+cp -R "$TMP/fragments-bare-stamped" "$TMP/fragments-bare-survivor"
+printf '%s\n' "- This entry was not consumed." \
+  >"$TMP/fragments-bare-survivor/changelog.d/115.md"
+check "fragment bare refuses and lists surviving fragments" 1 \
+  "these fragments were not consumed: changelog.d/115.md" \
+  in_tree fragments-bare-survivor
+
+fragment_tree fragments-bare-wrong 1.2.3 <<'EOF'
+# Changelog
+
+## 9.9.9 — 2026-07-20
+
+- The wrong release.
+
+## 1.2.3 — 2026-07-19
+
+- The right release was not stamped on top.
+EOF
+check "fragment bare refuses a stamp for another version" 1 \
+  "stamped the wrong number" in_tree fragments-bare-wrong
+
+fragment_tree fragments-bare-missing 1.2.3 <<'EOF'
+# Changelog
+
+## 1.2.2 — 2026-07-01
+
+- The older entry.
+EOF
+check "fragment bare refuses a missing stamp via section diagnosis" 1 \
+  "no section for '1.2.3'" in_tree fragments-bare-missing
+
+fragment_tree fragments-cross-mode 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+check "same changelog passes in fragment mode" 0 "fragment mode" \
+  in_tree fragments-cross-mode
+rm -rf "$TMP/fragments-cross-mode/changelog.d"
+check "same changelog fails in legacy mode" 1 "development tree" \
+  in_tree fragments-cross-mode
+
 # --- the action's wiring: inputs arrive as env vars --------------------------
 
 mkdir -p "$TMP/env-tree"
@@ -258,5 +411,15 @@ env_tree() {
   (cd "$TMP/env-tree" && CHANGELOG=NOTES.md VERSION_SOURCE=file bash "$SCRIPT")
 }
 check "env vars drive the script the way action.yml does" 0 "agrees" env_tree
+
+mkdir -p "$TMP/env-fragments/custom.d"
+printf '1.2.4-dev\n' >"$TMP/env-fragments/VERSION"
+printf '# Changelog\n\n## 1.2.3 — 2026-07-20\n\n- Shipped.\n' \
+  >"$TMP/env-fragments/CHANGELOG.md"
+printf '%s\n' "# Changelog fragments" >"$TMP/env-fragments/custom.d/README.md"
+env_fragments() {
+  (cd "$TMP/env-fragments" && FRAGMENTS_DIR=custom.d bash "$SCRIPT")
+}
+check "fragments-dir env var selects fragment mode" 0 "fragment mode" env_fragments
 
 summary
