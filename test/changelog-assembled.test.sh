@@ -252,9 +252,15 @@ check "a section stamped from zero fragments fails on the replay's refusal" 1 \
 check "missing changelog fails" 1 "no such file" run faithful-flat base NOPE.md
 
 # --- the trio interaction row (the issue's whole argument) -------------------
-# On the faithful tree all three guards are green; on the dropped-entry tree
-# armed is green (the section exists and has prose), monotonic is green (no
-# heading was deleted) — this guard is the ONLY one that goes red.
+# On the faithful tree all three guards are green. On the dropped-entry tree
+# monotonic is green (no heading was deleted) and, since #115's fragment
+# mode, armed is red too — the surviving fragment is unconsumed on a bare
+# tree — but only this guard names the entry the release LOST (#116 was
+# written before #115 landed and expected armed green there; #117's flip
+# recorded the interaction as it now stands). The hand-edited tree is where
+# this guard stands alone: armed sees a publishable section, monotonic sees
+# no deleted heading, and only the replay knows the prose is not what the
+# authors wrote.
 
 run_armed() { (cd "$TMP/$1" && bash "$ARMED"); }
 run_monotonic() { local name="$1"; shift; (cd "$TMP/$name" && bash "$MONOTONIC" "$@"); }
@@ -264,12 +270,17 @@ check "trio, faithful tree: changelog-monotonic green" 0 "still present" \
   run_monotonic faithful-flat base
 check "trio, faithful tree: changelog-assembled green" 0 "byte-for-byte" \
   run faithful-flat base
-check "trio, dropped-entry tree: changelog-armed stays green" 0 "agrees" \
-  run_armed dropped
+check "trio, dropped-entry tree: changelog-armed red too (unconsumed fragment)" 1 \
+  "not consumed" run_armed dropped
 check "trio, dropped-entry tree: changelog-monotonic stays green" 0 "still present" \
   run_monotonic dropped base
-check "trio, dropped-entry tree: changelog-assembled is the only red" 1 "" \
-  run dropped base
+check "trio, dropped-entry tree: changelog-assembled names the lost entry" 1 \
+  "Nine landed" run dropped base
+check "trio, hand-edited tree: changelog-armed green" 0 "agrees" run_armed edited
+check "trio, hand-edited tree: changelog-monotonic stays green" 0 "still present" \
+  run_monotonic edited base
+check "trio, hand-edited tree: changelog-assembled is the only red" 1 "allegedly" \
+  run edited base
 
 # --- degradation: the loud skip and the STRICT refusal -----------------------
 
