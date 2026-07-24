@@ -654,7 +654,7 @@ blind_main_probe() {
     LABELS_CONF=.github/labels.conf
     gh() {
       if [ "$1" = label ] && [ "$2" = list ]; then
-        printf 'state:building\nstate:addressing\n'
+        core_label_rows | cut -d'|' -f1
       elif [ "$1" = pr ] && [ "$2" = list ]; then
         printf '101\n102\n'
       elif [ "$1" = pr ] && [ "$2" = view ]; then
