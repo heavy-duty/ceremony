@@ -15,14 +15,19 @@ triage bug, and the move is to say so on the issue, not to guess.
   writing or revising a deliverable — finish or release that work before
   starting new work. The rule counts build work in flight, not claims: a
   claim does not consume the slot while it is **parked**, meaning the next
-  move belongs to someone else. Exactly three shapes qualify:
+  move belongs to someone else. Exactly four shapes qualify:
   1. the issue carries `needs-ruling`, its escalation names a decider, and
      its `Blocked:` line stops the remaining work;
   2. the deliverable is in a review round where every outstanding verdict
-     belongs to someone else — the round was answered whole and the
-     non-approvers re-requested (the review round, step 2);
+     belongs to someone else — either the round is awaiting its first
+     verdicts, or it was answered whole and the non-approvers re-requested
+     (the review round, steps 1–2). This is the *live* round; shape 4 is
+     the *passed* one — they are sequential and do not overlap;
   3. every remaining acceptance criterion is operator-owned, stated as such
-     by triage on the issue.
+     by triage on the issue;
+  4. the deliverable is **handed off** — the round passed, no `blocker:*`
+     stands, and you set `state:needs-human` per Handoff (below). The
+     remaining move is the human's merge.
   Not parked — these are what the rule defends against: waiting on
   yourself, waiting on CI, or waiting for a good moment. An issue you have
   simply stopped working on is not parked either — that is abandonment,
@@ -49,6 +54,12 @@ triage bug, and the move is to say so on the issue, not to guess.
   ([#52](https://github.com/heavy-duty/ceremony/issues/52)) and `offsite`
   ([#68](https://github.com/heavy-duty/ceremony/issues/68)) exemptions
   already guard — a parked claim nobody can name is an abandoned one.
+  Shape 4 alone is exempt from the separate comment: the handoff round
+  summary plus the `state:needs-human` write *is* its declaration — both
+  halves are already there, what the claim waits on (the merge) and who
+  owns the next move (the human), and both are visible to any scan as a
+  `labeled` event with the summary beside it. No second comment is owed
+  on the issue. Every other shape still declares as above.
 - **Pick up `attention` before anything else.** On your claim, first post a
   short pickup comment and remove `attention`; the removal is the ack. A
   demand on a parked claim is usually its unpark, so take the slot back under
@@ -189,5 +200,6 @@ this is a release PR) — hand it to the human, in order:
 
 The label write is optimistic — the reconciler validates it, and takes it
 back if the PR is not actually mergeable-right-now. Then stop: the PR is the
-human's. Address what comes back (`state:addressing`) and re-hand-off the
-same way.
+human's. The claim is now parked as shape 4 (Picking, above) — the handoff
+you just posted is its declaration, and your build slot is free. Address
+what comes back (`state:addressing`) and re-hand-off the same way.
