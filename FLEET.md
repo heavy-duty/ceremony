@@ -6,7 +6,12 @@
 > the vendored doctrine set (`.ceremony/`) and is never mirrored to consumer
 > repos. The doctrine files (AGENTS.md, TRIAGE.md, BUILDER.md, REVIEWER.md,
 > LABELS.md, CONTRIBUTING.md) say what roles *must* do; this file says how the
-> current bench *physically* does it.
+> current bench *physically* does it. Last reconciled against the deployed
+> duty scripts at
+> [`heavy-duty/crew@b2fd864`](https://github.com/heavy-duty/crew/tree/b2fd8642e7f7aa8dc9de6b44edadbe1dc557b140)
+> (private to the org; the fleet can read it), 2026-07-24 — a descriptive
+> file with no reconciliation stamp gives the next reader nothing to diff,
+> which is exactly how the #149 drift went unnoticed.
 
 ## The roster
 
@@ -34,9 +39,12 @@ Every box runs the same skeleton, adapted to its CLI:
   triage box adds an hourly hygiene sweep under its own lock. Holding the lock
   is load-bearing: a tick that acquires it *knows* nothing else is running on
   this identity.
-- **Poll:** the script reads `~/duty/repos.txt` (the repo registry — adding a
-  repo is adding a line) and queries GitHub with `gh` for work matching the
-  box's role.
+- **Poll:** the script reads `~/duty/repos.txt` and queries GitHub with `gh`
+  for work matching the box's role. Whose registry that file is depends on
+  the role: the triage box's `repos.txt` **is** its registry — adding a repo
+  is adding a line — while a reviewer's registry is the org itself, and its
+  `repos.txt` is a backstop that cannot scope it (grok's copy says so in its
+  own first line).
 - **Act:** when there is work, the script launches the box's CLI as a one-shot
   session with a role prompt; the session does the work via `gh` as the box's
   own identity, then exits. Sessions are stateless and disposable — all state
@@ -95,13 +103,21 @@ absent, so the wiring can be verified live the day the row lands.
   fully approved (write the closing summary, flip to `state:needs-human`,
   request the human), my PR `CONFLICTING` (rebase; never act on `UNKNOWN` —
   post-merge flap).
-- **Reviewers**, in priority order: first, a review requested on me in any
-  repo (`gh search prs --review-requested=@me --state=open`); second, the
-  repo-list poll for an open PR by someone else whose head I have not yet
-  reviewed. Both triggers keep the existing one-verdict-per-head rule,
-  deduplicated against my own latest review's SHA rather than the search index
-  (it lags). The request trigger runs first because it reaches repos the list
-  does not name.
+- **Reviewers**, one candidate set from two merged sources. Source 1,
+  authoritative: every open PR in the `heavy-duty` org **plus the named bot
+  forks** that lists me in `requested_reviewers`, enumerated straight from
+  the pulls API — never `gh search`, whose index lags (cast#143,
+  incubator#25 and box#164 each sat unreviewed behind it). A review request
+  is authorization, so no repo filter may gate it. Source 2, backstop: the
+  `repos.txt` poll for an open PR by someone else whose head I have not yet
+  reviewed — it only **adds** candidates the sweep may have missed (an
+  org-enumeration failure, say) and never concludes "nothing to do". The
+  sources are merged and deduplicated by (repo, PR) **before** acting, not
+  run as sequential passes — the sequential shape double-announced on
+  ceremony#32, when the request sweep and the repo-list poll each acted on
+  the same PR in one tick (operator protocol 2026-07-23) — and worked
+  oldest-first. Unchanged: one verdict per head, deduplicated against my
+  own latest review's SHA.
 
 #### The operator notifier — the `needs-ruling` queue
 
@@ -149,9 +165,11 @@ the notifier and triage's past-24h wake above *report and pick up* what the
 board already shows; the label itself moves only by the doctrine's hands.
 
 `~/duty/repos.txt` and the duty scripts live inside each box and are the
-operator's to change. This descriptive edit is the spec for those box-side
-updates; until an operator makes them, the request trigger and the notifier's
-`needs-ruling` queue exist on paper only.
+operator's to change; this descriptive edit is the spec for those box-side
+updates. The reviewers' request sweep is one such spec made real — deployed
+on all four reviewer boxes since 2026-07-23 (the Reviewers wake above). The
+notifier's `needs-ruling` queue is still on paper only: `notify.sh`'s one
+label filter today is `state:needs-human`.
 
 ### Resilience
 
