@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Fold the changelog.d/ fragments into one release section (#112, #114).
+# Run by hand in the release PR, from a checkout of ceremony at the
+# consumer's pin — deliberately not a CI step, because the assembled
+# section must land in the PR diff where the panel reads it.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=lib/changelog.sh
+source "$ROOT/lib/changelog.sh"
+
+usage() {
+  echo "usage: changelog-assemble <version> [<date>] [--changelog <file>] [--dir <dir>] [--check]" >&2
+  exit 2
+}
+
+refuse() {
+  printf 'changelog-assemble: %s\n' "$1" >&2
+  exit 1
+}
+
+ver=""
+stamp=""
+changelog="CHANGELOG.md"
+dir="changelog.d"
+checkmode=0
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --changelog)
+      [ $# -ge 2 ] || usage
+      changelog="$2"
+      shift 2
+      ;;
+    --dir)
+      [ $# -ge 2 ] || usage
+      dir="$2"
+      shift 2
+      ;;
+    --check)
+      checkmode=1
+      shift
+      ;;
+    -*)
+      usage
+      ;;
+    *)
+      if [ -z "$ver" ]; then
+        ver="$1"
+      elif [ -z "$stamp" ]; then
+        stamp="$1"
+      else
+        usage
+      fi
+      shift
+      ;;
+  esac
+done
+[ -n "$ver" ] || usage
+[ -n "$stamp" ] || stamp="$(date -u +%F)"
+
+[ -f "$changelog" ] || refuse "no such file: $changelog"
+
+# Every entry in the directory must be a publishable fragment. A stray file
+# in a machine-assembled directory is a mistake to surface, never to skip —
+# except README.md, the directory's marker (#112 D1). This runs before the
+# zero-fragments check so a directory holding only 'notes.txt' names the
+# stray file instead of claiming emptiness.
+for f in "$dir"/*; do
+  [ -e "$f" ] || continue
+  [ "${f##*/}" = "README.md" ] && continue
+  if ! diagnosis="$(changelog_fragment_problem "$f")"; then
+    refuse "$diagnosis"
+  fi
+done
+
+fragments="$(changelog_fragments "$dir")"
+[ -n "$fragments" ] || refuse "zero fragments in '$dir' — a release publishes prose; refusing to publish an empty release"
+
+if ! body="$(changelog_assemble "$dir")"; then
+  refuse "$body"
+fi
+
+# Whole-version match, as everywhere in this family: 0.2.0-rc1 in the
+# changelog never blocks assembling 0.2.0.
+if awk -v ver="$ver" '/^## / && $2 == ver { found = 1; exit } END { exit !found }' "$changelog"; then
+  refuse "$changelog already has a section for '$ver' — the ceremony was already run"
+fi
+
+if [ "$checkmode" = 1 ]; then
+  # --check prints the body, not the heading: the body is the invariant a
+  # caller can compare — #116 checks it against the release PR's stamped
+  # section, whose date the PR chose, not the day the check runs.
+  printf '%s\n' "$body"
+  exit 0
+fi
+
+heading="## $ver — $stamp"
+lineno="$(grep -n -m1 '^## ' "$changelog" | cut -d: -f1)" || lineno=""
+tmp="$(mktemp "$changelog.XXXXXX")"
+if [ -n "$lineno" ]; then
+  {
+    head -n "$((lineno - 1))" "$changelog"
+    printf '%s\n\n%s\n\n' "$heading" "$body"
+    tail -n +"$lineno" "$changelog"
+  } >"$tmp"
+else
+  # No section yet: the whole file is preamble, and the section goes after it.
+  {
+    cat "$changelog"
+    printf '\n%s\n\n%s\n' "$heading" "$body"
+  } >"$tmp"
+fi
+mv "$tmp" "$changelog"
+
+count=0
+while IFS= read -r f; do
+  rm -- "$f"
+  count=$((count + 1))
+done <<<"$fragments"
+
+printf "changelog-assemble: wrote '%s' to %s, consumed %d fragment(s)\n" "$heading" "$changelog" "$count" >&2
