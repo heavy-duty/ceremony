@@ -5,7 +5,10 @@ published verbatim as that release's body (lib/changelog.sh extracts it),
 so entries say what changed, cite the issue, and stop. Entries arrive as
 fragments — one `changelog.d/<issue>.md` per PR, never an edit to this
 file — and the release PR assembles them into the next section here
-(`bin/changelog-assemble`, #112).
+(`bin/changelog-assemble`, #112). Each entry is at most 300 characters after
+wrapped lines are joined and whitespace is collapsed; a genuinely long
+change ships as several short `- ` entries in the same fragment, never one
+long entry.
 
 ## 0.3.0 — 2026-07-24
 

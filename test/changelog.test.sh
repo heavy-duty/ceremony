@@ -259,6 +259,54 @@ check "fragment predicate: a dangling grouped heading is refused, heading named"
   "has an empty heading: '### Added'" \
   changelog_fragment_problem "$PF/22.md"
 
+entry_of_length() {
+  local count="$1"
+  awk -v count="$count" 'BEGIN {
+    printf "%0*d\n", count, 0
+  }'
+}
+
+printf -- '- %s\n' "$(entry_of_length 300)" >"$PF/23.md"
+check "fragment predicate: a 300-character entry passes" 0 "" \
+  changelog_fragment_problem "$PF/23.md"
+
+printf -- '- %s\n' "$(entry_of_length 301)" >"$PF/24.md"
+check "fragment predicate: a 301-character entry is refused with actionable detail" 1 \
+  "301 characters, bound 300 — split it into multiple '- ' entries in this same fragment" \
+  changelog_fragment_problem "$PF/24.md"
+check "fragment predicate: an overlong diagnosis previews the entry" 1 \
+  "000000000000000000000000000000000000000000000000000000000000…" \
+  changelog_fragment_problem "$PF/24.md"
+
+{
+  printf -- '- %s\n' "$(entry_of_length 200)"
+  printf -- '- %s\n' "$(entry_of_length 200)"
+} >"$PF/25.md"
+check "fragment predicate: several bounded entries may total over 300 characters" 0 "" \
+  changelog_fragment_problem "$PF/25.md"
+
+{
+  printf -- '- %s\n' "$(entry_of_length 60)"
+  printf '  %s\n' "$(entry_of_length 60)"
+  printf '  %s\n' "$(entry_of_length 60)"
+  printf '  %s\n' "$(entry_of_length 67)"
+} >"$PF/26.md"
+check "fragment predicate: a roughly 250-character entry may wrap over four lines" 0 "" \
+  changelog_fragment_problem "$PF/26.md"
+
+{
+  printf '### Added\n\n'
+  printf -- '- %s\n\n' "$(entry_of_length 300)"
+  printf '### Fixed\n\n'
+  printf -- '* %s\n' "$(entry_of_length 301)"
+} >"$PF/27.md"
+check "fragment predicate: grouped headings are not counted and grouped bullets are bounded" 1 \
+  "301 characters, bound 300" \
+  changelog_fragment_problem "$PF/27.md"
+
+check "section predicate: published over-bound entries remain unvalidated" 0 "" \
+  changelog_section_problem "$ROOT/CHANGELOG.md" 0.3.0
+
 # --- the assembler (#114) ----------------------------------------------------
 
 assert_assemble() {

@@ -104,6 +104,9 @@ changelog_fragments() {
 #     a smuggled one would split the published section;
 #   - at least one bullet: a heading is not an entry — the rule the
 #     publisher enforces at release time, moved onto the PR;
+#   - at most 300 characters per normalized entry: prose drift is refused
+#     where it is written (#167), with wrapped continuation lines joined and
+#     whitespace collapsed before measuring;
 #   - no '### ' heading without a bullet before the next heading or EOF:
 #     the dangling grouped heading #98 taught us to refuse.
 changelog_fragment_problem() {
@@ -122,6 +125,44 @@ changelog_fragment_problem() {
 
   if ! grep -qE '^[[:space:]]*[-*][[:space:]]' "$file"; then
     printf "fragment '%s' has no entries — a heading is not an entry\n" "$file"
+    return 1
+  fi
+
+  problem="$(
+    awk '
+      function inspect( normalized, preview) {
+        if (entry == "") return
+        normalized = entry
+        gsub(/[[:space:]]+/, " ", normalized)
+        sub(/^ /, "", normalized)
+        sub(/ $/, "", normalized)
+        if (length(normalized) > 300) {
+          preview = substr(normalized, 1, 60)
+          print length(normalized) "\t" preview
+          entry = ""
+          exit
+        }
+      }
+      /^[[:space:]]*[-*][[:space:]]/ {
+        inspect()
+        entry = $0
+        sub(/^[[:space:]]*[-*][[:space:]]+/, "", entry)
+        next
+      }
+      /^### / {
+        inspect()
+        entry = ""
+        next
+      }
+      entry != "" { entry = entry " " $0 }
+      END { inspect() }
+    ' "$file"
+  )"
+  if [ -n "$problem" ]; then
+    local length preview
+    IFS="$(printf '\t')" read -r length preview <<<"$problem"
+    printf "fragment '%s' has an overlong entry '%s…': %s characters, bound 300 — split it into multiple '- ' entries in this same fragment\n" \
+      "$file" "$preview" "$length"
     return 1
   fi
 
