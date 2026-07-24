@@ -284,7 +284,10 @@ on:
   schedule: [{cron: "*/15 * * * *"}] # advisory; the handoff label is the real wake
   workflow_dispatch:                 # bootstraps missing labels on a fresh repo
   pull_request_target:
-    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
+    # review_requested/review_request_removed are unreleased — not in 0.2.0;
+    # add them with the pin bump to the first tag carrying ceremony#137. They
+    # wake the sweep that clears blocker:unrequested when the panel is asked.
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled, review_requested, review_request_removed]
   # Unreleased — not in 0.1.0; add only with the first tag carrying ceremony#32.
   issues:
     types: [opened, labeled, unlabeled, assigned, unassigned, closed]
@@ -311,8 +314,13 @@ to the first tag carrying ceremony#32; never mix refs to adopt it early.
 `pull_request_target` is intentional: fork PRs need the base repository's
 token to write labels. The reusable workflow executes no PR code. It checks
 out only the consumer's base branch and the pinned ceremony implementation.
-The #52 ruling invariants ride exactly these triggers — the caller above is
-unchanged since #18, so adopting them is a pin bump, not a stub edit.
+The #52 ruling invariants ride exactly these triggers — but the caller above
+is no longer the #18 shape, so adopting current triggers is a stub edit, not
+a bare pin bump. The pending edit is `review_requested` and
+`review_request_removed` (#137): the wake that clears `blocker:unrequested`
+the moment the panel is asked, without which a quiet repo wears that flag
+until the advisory cron. Make that edit with the pin bump to the first tag
+carrying ceremony#137 — never before it and never through mixed refs.
 
 `.github/labels.conf` has one mandatory panel setting, one mandatory
 `triage-actors` setting, and then zero or more scope rows:

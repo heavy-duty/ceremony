@@ -30,10 +30,16 @@ jobs:
   scope:
     # Not on labeled/unlabeled: those events change no paths, so labeler has
     # nothing new to derive — and label churn is precisely what they are.
+    # review_requested/review_request_removed likewise change no paths — they
+    # exist to wake reconcile (#137) — and running labeler on them widens
+    # exactly the window #130 documents, where a label written during a
+    # scope run is clobbered.
     if: >-
       github.event_name == 'pull_request_target' &&
       github.event.action != 'labeled' &&
-      github.event.action != 'unlabeled'
+      github.event.action != 'unlabeled' &&
+      github.event.action != 'review_requested' &&
+      github.event.action != 'review_request_removed'
     runs-on: ubuntu-latest
     concurrency:
       group: labels-scope-${{ github.event.pull_request.number }}
