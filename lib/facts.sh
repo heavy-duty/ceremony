@@ -44,31 +44,50 @@ ver="$(version_read "$VERSION_SOURCE")"
 # event.before is all-zeros on a branch-create push, and absent outside push
 # events; the pushed head's first parent is main the instant before, either
 # way (#1 constraint 10; cast's `*[!0]*` test — "contains a non-zero char").
+# One branch-create has no instant before: the repository's FIRST push to
+# main, whose head is a root commit — both 0.2.0 drills died here at exit
+# 128, the first release-flow event either scratch consumer ever saw (#134).
+# The parent count is read as a fact (`rev-list --parents` prints the head
+# alone for a root commit) rather than inferred from a failed rev-parse, so
+# an unresolvable MERGE_SHA still dies loudly instead of masquerading as
+# "(none)".
 base_sha="${EVENT_BEFORE:-}"
 case "$base_sha" in
   *[!0]*) ;;
-  *) base_sha="$(git rev-parse "$MERGE_SHA^1")" ;;
+  *)
+    parents="$(git rev-list --parents -n 1 "$MERGE_SHA")"
+    case "$parents" in
+      *" "*) base_sha="$(git rev-parse "$MERGE_SHA^1")" ;;
+      *) base_sha="" ;; # a root commit: no base tree exists at all
+    esac
+    ;;
 esac
 
 # Belt-and-braces (cast's precedent): the workflow's fetch-depth: 2 resolves
 # the first parent, but event.before can predate it when pushes raced. If
 # the fetch still cannot produce it, the git show below is the loud failure.
-git cat-file -e "$base_sha" 2>/dev/null \
-  || git fetch --depth=1 origin "$base_sha" >&2 \
-  || true
+# Skipped entirely when there is no base: with an empty rev the fetch is
+# meaningless and `git show ":$src"` would read the INDEX — reporting the
+# head's own version as the base, a wrong fact worse than any crash (#134).
+if [ -n "$base_sha" ]; then
+  git cat-file -e "$base_sha" 2>/dev/null \
+    || git fetch --depth=1 origin "$base_sha" >&2 \
+    || true
+fi
 
 base_dir="$(mktemp -d)"
 trap 'rm -rf "$base_dir"' EXIT
 
-if git show "$base_sha:$src" >"$base_dir/$src" 2>/dev/null; then
+if [ -n "$base_sha" ] && git show "$base_sha:$src" >"$base_dir/$src" 2>/dev/null; then
   base_ver="$(version_read "$VERSION_SOURCE" "$base_dir")"
 else
-  # The base tree has no version source at all: the merge that ADDS the
-  # version machinery (a consumer's adoption PR, a greenfield repo's first
-  # caller). "(none)" is not a version, so decide sees a changed version
-  # and the table still governs: a -dev head is work (row 2, the guided
-  # bootstrap path), a bare head still demands the merged release label
-  # (rows 5–6). Nothing releases silently either way.
+  # No base tree (a root commit — the repository's first push, the 0.2.0
+  # drills' wall, #134), or a base tree with no version source in it: the
+  # merge that ADDS the version machinery (a consumer's adoption PR, a
+  # greenfield repo's first caller). "(none)" is not a version, so decide
+  # sees a changed version and the table still governs: a -dev head is work
+  # (row 2, the guided bootstrap path), a bare head still demands the
+  # merged release label (rows 5–6). Nothing releases silently either way.
   base_ver="(none)"
 fi
 
