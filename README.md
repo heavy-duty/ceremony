@@ -170,8 +170,13 @@ pin bump, on its own schedule (#112 D8):
 mechanism outright; legacy mode guards it. **Red means** a PR entry has
 nowhere safe to land — a missing marker, a surviving `## Unreleased`, a
 malformed fragment — or a stamped version would publish no entries, a
-dangling grouped heading, or fewer fragments than it consumed; the
-message names the fix in every case.
+dangling grouped heading, or a bare tree still carrying fragments the
+stamp did not consume (`not consumed` — re-run the assembler); the
+message names the fix in every case. What this guard cannot see is a
+fragment that *was* consumed but whose entry the stamp omits — the
+fragment is gone from HEAD, so only
+[changelog-assembled](#changelog-assembled--the-stamp-is-exactly-the-fragments)'s
+merge-base replay catches that loss.
 
 **Do not "simplify" this to "always require `## Unreleased`".** The
 unconditional form is false by construction on the ceremony PR's own tree
@@ -202,11 +207,18 @@ passes with a green `NOTICE`, so a non-ceremony PR is never red here.
 
 **The failure it catches** (#116): assembly is a hand-run step by design —
 the section must land in the PR's diff where the panel reads it (#112 D12)
-— and a mis-run hand step leaves no trace. Drop one fragment from the
-deletion and its entry is simply absent from the release: armed is green,
-monotonic is green, and the publisher happily publishes the shortened
-section. Hand-edit one word of the assembled prose and the published
-history quietly stops being what the authors wrote. The replay is what
+— and a mis-run hand step can leave no trace. The two failure shapes
+differ, and the guards split them exactly as
+[test/changelog-assembled.test.sh](test/changelog-assembled.test.sh)'s
+trio rows record: leave a fragment **out of the deletion** and it survives
+on HEAD, where
+[changelog-armed](#changelog-armed--main-never-sits-disarmed) already
+refuses the bare tree (`not consumed`) — this guard goes red too, naming
+the entry the section lost. But **delete** a fragment while omitting its
+entry from the stamp, or hand-edit one word of the assembled prose, and
+nothing on HEAD is out of place: armed is green, monotonic is green, and
+the publisher would happily publish history that is not what the authors
+wrote. Only the merge-base replay catches those. The replay is what
 makes a hand-run step safe. **This guard needs history** — same stance as
 the monotonic guard: `fetch-depth: 0`, and in CI an unresolvable base is a
 hard failure, not a skip.
