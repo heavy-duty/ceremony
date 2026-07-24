@@ -39,16 +39,40 @@ rev() { # $1=login $2=state $3=commit $4=body $5=submitted_at → one review obj
 reviews() { jq -s '.' <<<"$*"; } # collect review objects into an array
 
 # -- a sweep-wide read failure is visible without changing any PR ------------
-warning="$(blind_sweep_warning 3 3)"
-expect "a wholly blind sweep warns" \
-  "::warning::labels: every open PR was unreadable; grant checks: read and statuses: read in the caller (private repos do not imply them)" \
+warning="$(blind_sweep_warning 3 3 "HTTP 403: Resource not accessible by integration")"
+expect "a wholly blind sweep warns, leading with the observed reason" \
+  "::warning::labels: every open PR was unreadable; sampled reason: HTTP 403: Resource not accessible by integration — one candidate is missing checks: read and statuses: read in the caller (private repos do not imply them)" \
   "$warning"
 expect "the blind warning names checks: read" named \
   "$(grep -qF "checks: read" <<<"$warning" && echo named || echo missing)"
 expect "the blind warning names statuses: read" named \
   "$(grep -qF "statuses: read" <<<"$warning" && echo named || echo missing)"
-expect "a partially blind sweep does not warn" "" "$(blind_sweep_warning 1 3)"
-expect "a sweep with no open PRs does not warn" "" "$(blind_sweep_warning 0 0)"
+# must-fail (#101 D5): the #95 inference — disproven on incubator while the
+# run held the evidence — must never again be stated as the cause
+expect "the warning no longer asserts the permissions diagnosis as fact" no \
+  "$(grep -qF "grant checks: read and statuses: read" <<<"$warning" && echo yes || echo no)"
+warning="$(blind_sweep_warning 3 3 "")"
+expect "with no reason captured the warning says exactly that" yes \
+  "$(grep -qF "no reason was captured" <<<"$warning" && echo yes || echo no)"
+expect "...and keeps the permissions candidate" named \
+  "$(grep -qF "checks: read" <<<"$warning" && echo named || echo missing)"
+expect "a partially blind sweep does not warn" "" "$(blind_sweep_warning 1 3 "x")"
+expect "a sweep with no open PRs does not warn" "" "$(blind_sweep_warning 0 0 "")"
+
+# -- the reason helper: facts in, one bounded line out (#101 D3/D4) ----------
+expect "empty stderr is reported as its own fact" "no error output" \
+  "$(read_failure_reason "")"
+expect "multi-line stderr collapses to one line" \
+  "GraphQL: Resource not accessible by integration (repository.pullRequest.mergeable) Resource not accessible by integration (repository.pullRequest.statusCheckRollup)" \
+  "$(read_failure_reason $'GraphQL: Resource not accessible by integration (repository.pullRequest.mergeable)\nResource not accessible by integration (repository.pullRequest.statusCheckRollup)')"
+long_reason="$(printf 'e%.0s' {1..400})"
+short_reason="$(read_failure_reason "$long_reason")"
+expect "400 chars of stderr truncate to 300 plus an ellipsis, one line" \
+  "$(printf 'e%.0s' {1..300})…" "$short_reason"
+expect "...within the 304-byte bound" yes \
+  "$([ "${#short_reason}" -le 304 ] && echo yes || echo no)"
+exact_reason="$(read_failure_reason "$(printf 'e%.0s' {1..300})")"
+expect "a 300-char reason passes through whole" 300 "${#exact_reason}"
 
 # -- drafts are building, whoever is requested --------------------------------
 DRAFT=true HEAD_SHA=head1 REQUESTED="" REVIEWS_JSON='[]'
@@ -616,7 +640,9 @@ blind_main_probe() {
       elif [ "$1" = pr ] && [ "$2" = list ]; then
         printf '101\n102\n'
       elif [ "$1" = pr ] && [ "$2" = view ]; then
-        printf '{}\n'
+        # a denial with its reason on stderr, the way real gh fails (#101)
+        printf 'GraphQL: Resource not accessible by integration (repository.pullRequest.statusCheckRollup)\n' >&2
+        return 1
       elif [ "$1" = api ] && [[ "$*" = *"/reviews"* ]]; then
         return 0
       elif [ "$1" = api ]; then
@@ -631,12 +657,28 @@ blind_main_probe() {
 }
 
 blind_main="$(blind_main_probe)"
-expect "a wholly blind main sweep emits one actionable annotation" 1 \
+expect "a wholly blind main sweep emits exactly one annotation" 1 \
+  "$(grep -c '^::warning::' <<<"$blind_main")"
+expect "...leading with the reason the sweep actually observed" 1 \
+  "$(grep -c '^::warning::.*Resource not accessible by integration' <<<"$blind_main")"
+expect "...still naming the permissions candidate" 1 \
   "$(grep -c '^::warning::.*checks: read.*statuses: read' <<<"$blind_main")"
+# must-fail (#101 D5): red if the disproven diagnosis is re-asserted as fact
+expect "...never as a stated cause" 0 \
+  "$(grep -c 'grant checks: read and statuses: read' <<<"$blind_main" || true)"
 expect "a wholly blind main sweep leaves every PR untouched" no \
   "$(grep -q '^MUTATION:' <<<"$blind_main" && echo yes || echo no)"
-expect "the existing per-PR skip still runs for every blind PR" 2 \
-  "$(grep -c 'could not read mergeability/checks — left alone this pass' <<<"$blind_main")"
+expect "each blind PR keeps its counted line, matched by the sweep's own grep -qxF" yes \
+  "$(grep -qxF 'labels: #101: could not read mergeability/checks — left alone this pass' <<<"$blind_main" \
+    && grep -qxF 'labels: #102: could not read mergeability/checks — left alone this pass' <<<"$blind_main" \
+    && echo yes || echo no)"
+expect "each blind PR logs its reason as its own line beside the counted one" 2 \
+  "$(grep -c '^labels: #10[12]: read failed: GraphQL: Resource not accessible by integration' <<<"$blind_main")"
+# must-fail (#101 D1): red if a reason line whole-line-matches the counted
+# string (the counter would double-count) or the counted line changed (the
+# counter would miss it and the warning never fire)
+expect "exactly the blind PRs match the counted shape whole-line — no more, no less" 2 \
+  "$(grep -c '^labels: #[0-9]*: could not read mergeability/checks — left alone this pass$' <<<"$blind_main")"
 
 # ---------------------------------------------------------------------------
 # bootstrap_labels retires the GitHub defaults (#93). LABELS.md published
