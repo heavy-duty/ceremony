@@ -306,7 +306,7 @@ fragment_tree fragments-unreleased 1.2.4-dev <<'EOF'
 - The shipped entry.
 EOF
 check "fragment mode refuses even an empty Unreleased section" 1 \
-  "Unreleased.*survived the adoption" in_tree fragments-unreleased
+  "Unreleased' section survived the adoption" in_tree fragments-unreleased
 
 fragment_tree fragments-no-marker 1.2.4-dev <<'EOF'
 # Changelog
@@ -370,6 +370,10 @@ fragment_tree fragments-bare-wrong 1.2.3 <<'EOF'
 ## 9.9.9 — 2026-07-20
 
 - The wrong release.
+
+## 1.2.3 — 2026-07-19
+
+- The right release was not stamped on top.
 EOF
 check "fragment bare refuses a stamp for another version" 1 \
   "stamped the wrong number" in_tree fragments-bare-wrong
