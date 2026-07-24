@@ -338,4 +338,63 @@ check "assemble: one fragment mixing both shapes is refused, file named" 1 \
   "'$AX/7.md' mixes grouped headings and ungrouped bullets" \
   changelog_assemble "$AX"
 
+# --- the fragment-set shape predicate (#159) ---------------------------------
+
+SHAPE_CHANGELOG="$TMP/CHANGELOG.shape.md"
+SHAPE_DIR="$TMP/shape-fragments"
+mkdir -p "$SHAPE_DIR"
+
+cat >"$SHAPE_CHANGELOG" <<'EOF'
+# Changelog
+
+## 2.0.0 — 2026-07-24
+
+- Newest section is flat.
+
+## 1.0.0 — 2026-07-01
+
+### Fixed
+
+- Older section is grouped.
+EOF
+printf -- '- Flat fragment.\n' >"$SHAPE_DIR/1.md"
+check "shape: flat set matches newest flat published section" 0 "" \
+  changelog_shape_problem "$SHAPE_CHANGELOG" "$SHAPE_DIR"
+
+cat >"$SHAPE_DIR/1.md" <<'EOF'
+### Fixed
+
+- Grouped fragment.
+EOF
+check "shape: grouped set names its conflict with newest flat published section" 1 \
+  "fragment '$SHAPE_DIR/1.md' is grouped but newest published section '2.0.0' in '$SHAPE_CHANGELOG' is flat" \
+  changelog_shape_problem "$SHAPE_CHANGELOG" "$SHAPE_DIR"
+
+cat >"$SHAPE_CHANGELOG" <<'EOF'
+# Changelog
+
+## 2.0.0 — 2026-07-24
+
+### Fixed
+
+- Newest section is grouped.
+EOF
+printf -- '- Flat fragment.\n' >"$SHAPE_DIR/1.md"
+check "shape: flat set names its conflict with newest grouped published section" 1 \
+  "fragment '$SHAPE_DIR/1.md' is flat but newest published section '2.0.0' in '$SHAPE_CHANGELOG' is grouped" \
+  changelog_shape_problem "$SHAPE_CHANGELOG" "$SHAPE_DIR"
+
+cat >"$SHAPE_DIR/1.md" <<'EOF'
+### Fixed
+
+- Grouped fragment.
+EOF
+check "shape: grouped set matches newest grouped published section" 0 "" \
+  changelog_shape_problem "$SHAPE_CHANGELOG" "$SHAPE_DIR"
+check "shape: consistent set with no published section passes" 0 "" \
+  changelog_shape_problem "$TMP/no-such-changelog" "$SHAPE_DIR"
+rm "$SHAPE_DIR/1.md"
+check "shape: empty fragment set makes the anchor rule vacuous" 0 "" \
+  changelog_shape_problem "$SHAPE_CHANGELOG" "$SHAPE_DIR"
+
 summary
