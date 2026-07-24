@@ -511,7 +511,7 @@ release_shape_warning() { # $1 = PR, $2 = head version, $3 = base version
   [ -n "$head_ver" ] || return 0
   grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' <<<"$head_ver" || return 0
   [ "$head_ver" != "$base_ver" ] || return 0
-  echo "::warning::labels: #$n is release-shaped (version $base_ver -> $head_ver at its head) but carries no release label — the merge door reads that label as declared intent and will refuse without it; if this is the ceremony PR, apply release (#130; the #128 incident)"
+  echo "::warning::labels: #$n is release-shaped (version ${base_ver:-unreadable} -> $head_ver at its head) but carries no release label — the merge door reads that label as declared intent and will refuse without it; if this is the ceremony PR, apply release (#130; the #128 incident)"
 }
 
 tree_version() { # $1 = ref → that tree's version via the API, or nothing
