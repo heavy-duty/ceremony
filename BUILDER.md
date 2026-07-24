@@ -99,7 +99,18 @@ triage bug, and the move is to say so on the issue, not to guess.
   merged or closed and clears `offsite` in the same comment. The cross-repo
   merge never closes the authorizing issue. This codifies the linkage
   builders already used on rig#112 and ceremony #13/#16 rather than adding a
-  new review obligation. Drafts are invisible to the reviewer panel on
+  new review obligation.
+  `Closes #N` also does not survive a post-merge criterion: when the issue's
+  body states that an acceptance criterion can only be checked after the
+  merge — a live proof of a workflow trigger, a released-artifact check,
+  anything whose subject does not exist until the change is on the base
+  branch — the same-repo PR uses `Refs #N` instead, and triage closes the
+  issue by hand on the evidence, exactly as it does for cross-repo work.
+  The issue body is what says so; you never judge which issues qualify, and
+  absent that instruction `Closes #N` remains the default. The exception was
+  bought the hard way: #143 carried `Closes #137` as doctrine then required,
+  and the merge closed #137 with its post-merge criterion unmet (#151).
+  Drafts are invisible to the reviewer panel on
   purpose — the draft phase is yours.
 - **The issue's acceptance criteria are your definition of done.** Reproduce
   them as a checklist in the PR body and check them honestly as you go. If
