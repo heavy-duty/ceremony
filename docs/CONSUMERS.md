@@ -425,6 +425,17 @@ CONTRIBUTING may sharpen it, but this is the floor the guards assume:
   working the same issue (#112 D2). Never an edit to `CHANGELOG.md`: the
   release PR assembles the section
   ([below](#assembling-a-release-section)).
+
+  The sole exception is the release PR: it writes no fragment. It consumes
+  the directory and stamps the section, so a fragment it created would be
+  absent from
+  [`changelog-assembled`](https://github.com/heavy-duty/ceremony/blob/a602fd0/actions/changelog-assembled/changelog-assembled.sh)'s
+  merge-base replay if consumed, or refused by
+  [`changelog-armed`](https://github.com/heavy-duty/ceremony/blob/a602fd0/actions/changelog-armed/changelog-armed.sh)
+  if left to survive into the next release. A change that must ship inside
+  the release PR therefore ships without an entry. If it can wait and wants
+  an entry, land it as an ordinary PR before the release PR, then rebase and
+  re-assemble the release.
 - **The fragment is the prose, not a description of it** (#112 D3): the
   exact lines that will be published — no front-matter, no `## ` heading
   (that one is the assembler's to write). `changelog-armed` refuses a
