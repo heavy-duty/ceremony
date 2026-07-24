@@ -12,20 +12,17 @@ drill is where they run live *before* a version rests on them.
 
 1. Create a scratch **private** repo. It is disposable by design — it gets
    deleted at the end.
-2. Install the docs/CONSUMERS.md caller stubs, pinned to the release
-   candidate ref. A branch ref works: refs are static identifiers — the
-   family's own drill doctrine.
+2. Install the docs/CONSUMERS.md caller stubs, pinned to a fork ref carrying
+   the release candidate tree. The candidate's `CEREMONY_SELF_REF` is by
+   construction the tag this release has not created yet, so the consumer
+   path cannot resolve directly from the candidate. Rewrite that pin to a
+   canonical candidate SHA in every carrier on the fork ref, and record the
+   fork ref and rewritten pin in the drill record.
 
-   **Except for the first release** (learned drilling 0.1.0, #11): the
-   stubs' consumer path fetches ceremony at `CEREMONY_SELF_REF` — the very
-   ref the first drill exists to rehearse creating — so the pure pinned
-   path cannot run before some `X.Y.Z` ref exists, and a branch named like
-   the tag must NOT be created on the canonical repo to paper over it (it
-   would shadow the tag for every consumer until someone remembers to
-   delete it). The first drill instead pins the callers to a fork ref
-   carrying the candidate tree with `CEREMONY_SELF_REF` rewritten to the
-   candidate SHA in every pin carrier, and records that one-line deviation
-   in its record. From the second release on, this paragraph is moot.
+   Never create a branch named like the tag on `heavy-duty/ceremony` to
+   paper over this deadlock: it would shadow the tag for every consumer
+   until someone remembers to delete it. The 0.1.0 drill (#11) is the
+   worked example of this standing fork-ref shape.
 3. Give it a fixture `VERSION` / `CHANGELOG.md` / `changelog.d/` /
    `drills/` in the armed state (`X.Y.Z-dev`, the fragments directory with
    its `README.md` marker plus at least one fragment for the ceremony to
