@@ -141,7 +141,11 @@ triage bug, and the move is to say so on the issue, not to guess.
   cross-repo) — the exact prose that will be published, nothing else: `- `
   bullets, and in a grouped repo the `### Added` / `### Changed` /
   `### Fixed` headings inside the fragment, creating a rarer kind only when
-  a change genuinely is one. Never edit `CHANGELOG.md` for an entry — the
+  a change genuinely is one. An entry is at most 300 characters — the
+  fragment guard reds longer (#167) — so a genuinely long change ships
+  several short entries, never one long one; wrapping an entry over
+  continuation lines is fine and never counts against it. Never edit
+  `CHANGELOG.md` for an entry — the
   release PR assembles the section from the fragments (#112); the monotonic
   guard still refuses anything that deletes a shipped heading.
 - Follow the repo's conventions file and match the code you touch. Tests are

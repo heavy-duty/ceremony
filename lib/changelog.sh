@@ -106,6 +106,15 @@ changelog_fragments() {
 #     publisher enforces at release time, moved onto the PR;
 #   - no '### ' heading without a bullet before the next heading or EOF:
 #     the dangling grouped heading #98 taught us to refuse.
+#   - no entry longer than 300 characters (#167): 0.3.0 shipped a cluster of
+#     316–789-character entries straight through the prose rule, so the
+#     bound moves onto the PR like every other fragment rule. Measured on
+#     the normalized entry — continuation lines joined, whitespace runs
+#     collapsed to one space, the '- '/'* ' marker stripped, the '(#N)'
+#     citation included — so wrapping alone can never red an entry. 300
+#     splits the measured history: every healthy entry passes untouched,
+#     the drift cluster does not. mawk's length() counts bytes; prose here
+#     is ASCII and the fuzz is acceptable.
 changelog_fragment_problem() {
   local file="$1" base problem
   base="${file##*/}"
@@ -145,6 +154,40 @@ changelog_fragment_problem() {
   )"
   if [ -n "$problem" ]; then
     printf "fragment '%s' has an empty heading: '%s'\n" "$file" "$problem"
+    return 1
+  fi
+
+  problem="$(
+    awk -v max=300 '
+      function flush(   len, e) {
+        if (entry == "") return 0
+        e = entry
+        entry = ""
+        gsub(/[[:space:]]+/, " ", e)
+        sub(/^ /, "", e)
+        sub(/ $/, "", e)
+        len = length(e)
+        if (len > max) {
+          printf "%d\t%s\n", len, substr(e, 1, 60)
+          return 1
+        }
+        return 0
+      }
+      /^### / { if (flush()) exit; next }
+      /^[[:space:]]*[-*][[:space:]]/ {
+        if (flush()) exit
+        entry = $0
+        sub(/^[[:space:]]*[-*][[:space:]]+/, "", entry)
+        next
+      }
+      /^[[:space:]]*$/ { next }
+      entry != "" { entry = entry " " $0 }
+      END { flush() }
+    ' "$file"
+  )"
+  if [ -n "$problem" ]; then
+    printf "fragment '%s' has a %s-character entry — '%s…' — the bound is 300: split it into multiple '- ' entries in this same fragment\n" \
+      "$file" "${problem%%$'\t'*}" "${problem#*$'\t'}"
     return 1
   fi
 }
