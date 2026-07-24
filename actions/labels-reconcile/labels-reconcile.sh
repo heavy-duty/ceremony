@@ -96,6 +96,21 @@ read_failure_reason() { # $1 = captured stderr → one bounded line; pure (#101)
   fi
 }
 
+missing_core_labels_warning() { # $1 = declared rows, $2 = repo label names
+  local rows="$1" repo_labels="$2" row name missing=""
+  [ -n "$repo_labels" ] || return 0
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    name="${row%%|*}"
+    if ! grep -qxF "$name" <<<"$repo_labels"; then
+      if [ -n "$missing" ]; then missing="$missing, $name"; else missing="$name"; fi
+    fi
+  done <<<"$rows"
+  if [ -n "$missing" ]; then
+    echo "::warning::labels: missing core label(s): $missing; bump the ceremony pin, then re-dispatch workflow_dispatch to bootstrap the taxonomy"
+  fi
+}
+
 load_config() { # $1 = consumer labels.conf; panel is mandatory, scopes optional
   local conf="$1" line panel_seen=false
   [ -f "$conf" ] || {
@@ -627,6 +642,7 @@ main() {
   # add against it, because one unknown name fails the whole edit call.
   REPO_LABELS="$(gh label list -R "$REPO" --limit 200 --json name --jq '.[].name' 2>/dev/null || echo "")"
   [ -z "$REPO_LABELS" ] && log "WARNING: could not read the label set — applying labels unfiltered"
+  missing_core_labels_warning "$(core_label_rows)" "$REPO_LABELS"
 
   local n output status total=0 unreadable=0 sampled_reason=""
   while IFS= read -r n; do

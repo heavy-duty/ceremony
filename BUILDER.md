@@ -15,7 +15,7 @@ triage bug, and the move is to say so on the issue, not to guess.
   writing or revising a deliverable — finish or release that work before
   starting new work. The rule counts build work in flight, not claims: a
   claim does not consume the slot while it is **parked**, meaning the next
-  move belongs to someone else. Exactly four shapes qualify:
+  move belongs to someone else. Exactly five shapes qualify:
   1. the issue carries `needs-ruling`, its escalation names a decider, and
      its `Blocked:` line stops the remaining work;
   2. the deliverable is in a review round where every outstanding verdict
@@ -28,6 +28,10 @@ triage bug, and the move is to say so on the issue, not to guess.
   4. the deliverable is **handed off** — the round passed, no `blocker:*`
      stands, and you set `state:needs-human` per Handoff (below). The
      remaining move is the human's merge.
+  5. the claim is **held by directive** — triage or the operator has told
+     you to stop, the direction names what the hold waits on, and that thing
+     is not yours to move. This is not "waiting for a good moment": somebody
+     else has decided the work must not proceed, and only they end it.
   Not parked — these are what the rule defends against: waiting on
   yourself, waiting on CI, or waiting for a good moment. An issue you have
   simply stopped working on is not parked either — that is abandonment,
@@ -63,7 +67,14 @@ triage bug, and the move is to say so on the issue, not to guess.
 - **Pick up `attention` before anything else.** On your claim, first post a
   short pickup comment and remove `attention`; the removal is the ack. A
   demand on a parked claim is usually its unpark, so take the slot back under
-  the existing rule below rather than leaving the demand parked.
+  the existing rule below rather than leaving the demand parked. A demand
+  that *is* the park is different: the pickup comment is the declaration,
+  so one comment does both jobs, and the demand does not take the slot back.
+- **A directed hold keeps its bookkeeping visible.** The PR carries `blocked`
+  with a comment naming what it waits on; the issue stays `claimed` and
+  carries `attention` until the builder acknowledges it. Nobody unassigns
+  the issue, and the 48-hour reclaim does not fire because the claim has an
+  open PR. Unparking follows the existing rule below.
 - **Unparking is a claim like any other.** When the wait ends, the parked
   issue is work again and takes the slot. If you are already active
   elsewhere, finish or release that work first, and say which you did on

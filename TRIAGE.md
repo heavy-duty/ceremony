@@ -44,9 +44,9 @@ is the failure this whole flow exists to prevent.
    blocks something already on the board — an existing issue, or minted work
    a discussion's ruling gates — set `needs-ruling` on it too, so the board
    shows where the human's turn is; the issue keeps its queue label.
-   When you direct a builder to hold a claim that has no build work left,
-   say the claim is **parked** and name what it waits on — the directive
-   and the builder's doctrine
+   When you direct a builder to hold a claim, say the claim is **parked**,
+   name what it waits on, and set `attention` so the assignee's ack is visible
+   on the board — the directive and the builder's doctrine
    ([BUILDER.md](BUILDER.md#claiming)) must use one word.
    Past 24 hours from the current episode's `labeled` event, if the ruling
    still stands and doubt remains, it is triage's duty to pick the option the
