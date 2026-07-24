@@ -7,6 +7,52 @@ fragments — one `changelog.d/<issue>.md` per PR, never an edit to this
 file — and the release PR assembles them into the next section here
 (`bin/changelog-assemble`, #112).
 
+## 0.3.0 — 2026-07-24
+
+- Make `changelog-armed` reject fragment shape drift on the PR that introduces it.
+- A directive hold now has a written ending, not just a beginning: BUILDER.md's shape 5 says the hold ends where it began — on the labels — with the hold owner's most recent queue-label event governing over any stale prose, the timeline read (`gh api .../issues/{n}/timeline`) named as the move before standing down or up on a hold, a claim against stale prose required to cite the events it read, and a refused claim given its two exits. TRIAGE.md now requires re-reading label events before asserting label-borne state in prose, and makes correcting a lifted hold's stale body header triage's move in the same tick. On 2026-07-24 the unranked signals split two builders reading one board (#149, #151); both acted defensibly — the doctrine, not the builders, lacked the rule (#154).
+- Doctrine names the second `Closes #N` exception: a same-repo PR whose
+  authorizing issue marks an acceptance criterion post-merge uses `Refs #N`,
+  and triage closes the issue by hand on the evidence — merging #143
+  auto-closed #137 with exactly such a criterion unmet, and no role had been
+  told otherwise. TRIAGE.md now requires a post-merge criterion to carry its
+  own mechanism (post-merge, triage closes, `Refs #N`), REVIEWER.md lists
+  `Refs #N` beside `Closes #N` and `Part of <owner>/<repo>#N` and stops
+  treating the reference-only PR as a defect, and CONTRIBUTING.md points at
+  BUILDER.md as the rule's one home (#151).
+- FLEET.md — the Reviewers wake describes the deployed sweep, not the `gh search` trigger the bench replaced: the pulls-API `requested_reviewers` sweep across the org plus the named bot forks is source 1, the `repos.txt`/search poll an adds-only backstop, and the two are merged and deduplicated by (repo, PR) before acting. Only the notifier's `needs-ruling` queue remains on paper; `repos.txt` is the registry only on the triage box; and the Status block now stamps the crew ref the file was last reconciled against (#149).
+- REVIEWER.md now carries the review mechanics every box had been re-deriving from an incident: the queue comes from the API and not the search index, every write is one-shot per (reviewer, PR, head), heads are reviewed in throwaway checkouts, a pinned consumer's config is verified at its pin, and a verdict names the checks its box could not run (#145).
+- The `docs/CONSUMERS.md` labels-caller stub lists the same `issues:` types
+  as ceremony's own caller — `edited` and `reopened` included — so a consumer
+  adopting the stub wakes when an issue body's `Blocked by #N` declaration is
+  edited, and when a closed issue re-enters the queue wearing labels derived
+  at close. The two lists drifted apart inside PR #32; a parity test now pins
+  them together, red if either file drops a type or the lists diverge.
+  Adopting the widened list is a stub edit riding the pin bump to the first
+  tag carrying this change (#144).
+- `labels-reconcile` — a queue-cancelled duplicate check is discarded when its context holds a real verdict, so a sibling PR's eviction no longer reds a green PR; an all-cancelled context still blocks (#139).
+- `blocker:unrequested` now clears the moment the panel is asked: the labels
+  caller (and the `docs/CONSUMERS.md` stub) listens on `review_requested` and
+  `review_request_removed`, so the one event that falsifies the label — or
+  makes it true again — wakes the reconcile sweep instead of waiting for an
+  unrelated push or the advisory cron. The `scope` job skips both events:
+  they change no paths, and running the labeler on them widens the #130
+  clobber window. Adopting the new triggers is a stub edit riding the pin
+  bump to the first tag carrying this change (#137).
+- `drills/README.md` no longer tells the builder to delete the scratch repo —
+  a step no fleet identity can perform, because `delete_repo` is deliberately
+  absent from bot tokens. The builder's end state is **archive**
+  (`archived: true`, inside the `repo` scope); the delete is the operator's,
+  and cleanup gates nothing — not ready-for-review, not the panel, not the
+  merge. The drill record now names the scratch repo by `owner/name` and
+  states the disposal its author actually observed, never one that has not
+  happened: both 0.2.0 drills hit the missing-scope wall independently, one
+  stalling a release draft on an impossible 403, the other shipping a record
+  asserting a delete that never ran (#135).
+- `lib/facts.sh` — a repository's first push to `main` (a root commit with no first parent) now reads `base_ver=(none)` and lets decide's table govern, instead of dying at exit 128 before establishing a fact; the no-base path skips the base fetch and `git show`, and an unresolvable head still fails loudly (#134).
+- The changelog rule now explains why release PRs write no fragment and how entry-worthy changes land instead (#131).
+- `actions/labels-scope` replaces `actions/labeler@v5` in the labels workflow's scope job: labeler wrote the whole label set (`PUT`) even under `sync-labels: false`, silently removing any label applied while it ran — #128 lost its `release` that way — so the scope job now derives from the same `.github/labeler.yml` mapping (the `changed-files`/`any-glob-to-any-file` shape, block or flow; anything else refuses loudly) and its only write is an additive `POST`. The reconcile sweep also warns — never sets — when a non-draft PR is release-shaped (bare version differing from its base) but carries no `release` label (#130).
+
 ## 0.2.0 — 2026-07-24
 
 - `test/changelog-assembled.test.sh` — keep the trio interaction aligned with fragment mode: a dropped entry makes armed red too, while a hand-edited section leaves assembled as the sole red (#126).
