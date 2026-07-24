@@ -56,9 +56,9 @@ glob_to_regex() { # $1 = glob (the subset above) → anchored ERE, one line
           i=$((i + 2))
           continue
         fi
-        out="$out[^/]*"
+        out="${out}[^/]*"
         ;;
-      \?) out="$out[^/]" ;;
+      \?) out="${out}[^/]" ;;
       [a-zA-Z0-9_/-]) out="$out$c" ;;
       *) out="$out\\$c" ;; # every other byte is literal — ., +, {, (, …
     esac

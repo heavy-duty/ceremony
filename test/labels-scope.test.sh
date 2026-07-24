@@ -31,12 +31,15 @@ scope:docs${TAB}README"
 
 check "derive: ** matches nested paths" 0 "scope:release-flow" \
   derive_labels "$cfg" 'lib/deep/facts.sh'
+# shellcheck disable=SC2016 # expansion belongs to the nested bash
 check "derive: ** does not match the bare directory" 1 "" \
   bash -c 'source "$1"; [ -n "$(derive_labels "$2" lib)" ]' _ \
   "$ROOT/actions/labels-scope/labels-scope.sh" "$cfg"
+# shellcheck disable=SC2016 # expansion belongs to the nested bash
 check "derive: literal glob does not match a nested twin" 1 "" \
   bash -c 'source "$1"; [ -n "$(derive_labels "$2" docs2/README)" ]' _ \
   "$ROOT/actions/labels-scope/labels-scope.sh" "$cfg"
+# shellcheck disable=SC2016 # expansion belongs to the nested bash
 check "derive: one label per line, config order, deduped" 0 "" \
   bash -c 'source "$1"; got="$(derive_labels "$2" "$(printf "%s\n" README VERSION lib/x docs/a.md)")"
     [ "$got" = "$(printf "%s\n" scope:release-flow scope:docs)" ] || { printf "%s\n" "$got"; exit 1; }' _ \
