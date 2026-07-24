@@ -46,6 +46,17 @@ already proven:
    `### Added` / `### Changed` / `### Fixed` headings inside the fragment).
    Never edit `CHANGELOG.md` for an entry — the release PR assembles the
    section from the fragments (#112).
+
+   The sole exception is the release PR: it writes no fragment. It consumes
+   the directory and stamps the section, so a fragment it created would be
+   absent from
+   [`changelog-assembled`](https://github.com/heavy-duty/ceremony/blob/a602fd0/actions/changelog-assembled/changelog-assembled.sh)'s
+   merge-base replay if consumed, or refused by
+   [`changelog-armed`](https://github.com/heavy-duty/ceremony/blob/a602fd0/actions/changelog-armed/changelog-armed.sh)
+   if left to survive into the next release. A change that must ship inside
+   the release PR therefore ships without an entry. If it can wait and wants
+   an entry, land it as an ordinary PR before the release PR, then rebase and
+   re-assemble the release.
 2. **When it's ready**: mark ready-for-review and request the whole panel.
 3. **Rounds are answered whole.** Wait until every reviewer has a verdict in,
    then answer the entire round in a **single reply**, push the fixes, and
