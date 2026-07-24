@@ -299,8 +299,12 @@ on:
   schedule: [{cron: "*/15 * * * *"}] # advisory; the handoff label is the real wake
   workflow_dispatch:                 # bootstraps missing labels on a fresh repo
   pull_request_target:
-    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
-  # Unreleased — not in 0.1.0; add only with the first tag carrying ceremony#32.
+    # review_requested/review_request_removed are unreleased — not in 0.2.0;
+    # add them with the pin bump to the first tag carrying ceremony#137. They
+    # wake the sweep that clears blocker:unrequested when the panel is asked.
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled, review_requested, review_request_removed]
+  # Available at 0.2.0 and later (the first tag carrying ceremony#32); a
+  # consumer pinned to 0.1.0 omits this block.
   issues:
     types: [opened, labeled, unlabeled, assigned, unassigned, closed]
 permissions:
@@ -319,15 +323,21 @@ repositories allow check data to be read regardless, but a private consumer
 needs both explicit reads above; without them the failure appears as an empty
 `state:*` axis on the board rather than a red workflow run.
 
-The `issues:` trigger is **unreleased** and is not in `0.1.0`. A consumer
-pinned to `0.1.0` omits it. Add it only when bumping every ceremony reference
-to the first tag carrying ceremony#32; never mix refs to adopt it early.
+The `issues:` trigger is available at `0.2.0` and later — `0.2.0` is the
+first tag carrying ceremony#32. A consumer pinned to `0.1.0` omits it. Adopt
+it only by bumping every ceremony reference to `0.2.0` or later; never mix
+refs to adopt it early.
 
 `pull_request_target` is intentional: fork PRs need the base repository's
 token to write labels. The reusable workflow executes no PR code. It checks
 out only the consumer's base branch and the pinned ceremony implementation.
-The #52 ruling invariants ride exactly these triggers — the caller above is
-unchanged since #18, so adopting them is a pin bump, not a stub edit.
+The #52 ruling invariants ride exactly these triggers — but the caller above
+is no longer the #18 shape, so adopting current triggers is a stub edit, not
+a bare pin bump. The pending edit is `review_requested` and
+`review_request_removed` (#137): the wake that clears `blocker:unrequested`
+the moment the panel is asked, without which a quiet repo wears that flag
+until the advisory cron. Make that edit with the pin bump to the first tag
+carrying ceremony#137 — never before it and never through mixed refs.
 
 `.github/labels.conf` has one mandatory panel setting, one mandatory
 `triage-actors` setting, and then zero or more scope rows:
@@ -339,11 +349,11 @@ scope:cli|C5DEF5|The command-line surface
 scope:docs|C5DEF5|Documentation
 ```
 
-The mandatory `triage-actors=` setting is also **unreleased** and is not
-accepted by `0.1.0`. At that tag the file contains `panel=` plus scope rows
-only; adding `triage-actors=` is a parse failure, not an ignored setting. Add
-it at the same pin bump as the `issues:` trigger, to the first tag carrying
-ceremony#32 — never before it and never through mixed refs.
+The mandatory `triage-actors=` setting is likewise accepted at `0.2.0` and
+later, and not by `0.1.0`. At that tag the file contains `panel=` plus scope
+rows only; adding `triage-actors=` is a parse failure, not an ignored setting.
+Add it at the same pin bump as the `issues:` trigger — `0.2.0` or later —
+never before it and never through mixed refs.
 
 Both actor lists are whitespace-separated. `triage-actors` names the identities
 allowed to mint issues without the sweep applying `needs-triage`. Label rows use exactly

@@ -65,4 +65,41 @@ check "PR author is recused from the required panel" 0 "one three" printf '%s\n'
 check "LABELS.md enumerates no repo's scope labels" 1 "0" \
   grep -c 'scope:[a-z0-9]' "$ROOT/LABELS.md"
 
+# The caller's pull_request_target list and the CONSUMERS.md stub's must be
+# the same list. review_requested/review_request_removed are the wake that
+# clears blocker:unrequested — the label sat false for as long as a quiet
+# repo stayed quiet because the one event that falsifies it was never
+# listed (#137). The stub is prose, so nothing but this row keeps the two
+# lists from drifting: a type in one file only is a wake that fires at home
+# and nowhere in the fleet, or the reverse.
+pr_target_types() { # $1 = file → its pull_request_target types line, unindented
+  awk '/pull_request_target:/{f=1; next} f && /types: /{sub(/^ */,""); print; exit}' "$1"
+}
+types_in_sync() { # $1 = caller, $2 = stub → 0 when both lists exist and match
+  local a b
+  a="$(pr_target_types "$1")" b="$(pr_target_types "$2")"
+  [ -n "$a" ] && [ "$a" = "$b" ]
+}
+CALLER="$ROOT/.github/workflows/self-labels.yml"
+STUB="$ROOT/docs/CONSUMERS.md"
+check "caller and stub pull_request_target lists are identical" 0 "" \
+  types_in_sync "$CALLER" "$STUB"
+# shellcheck disable=SC2016 # expansion belongs to the nested bash
+check "the caller lists both review-request wakes" 0 "" bash -c \
+  'awk "/pull_request_target:/{f=1; next} f && /types: /{print; exit}" "$1" |
+     grep -F review_requested | grep -qF review_request_removed' _ "$CALLER"
+# the failing cases: drop a type from either file, or reorder one list only,
+# and the identity row above goes red — exercised here on mutated copies
+mut_caller="$TMP/mut-caller.yml" mut_stub="$TMP/mut-stub.md"
+sed 's/, review_request_removed//' "$CALLER" >"$mut_caller"
+check "a type dropped from the caller goes red" 1 "" \
+  types_in_sync "$mut_caller" "$STUB"
+sed 's/, review_request_removed//' "$STUB" >"$mut_stub"
+check "a type dropped from the stub goes red" 1 "" \
+  types_in_sync "$CALLER" "$mut_stub"
+sed 's/review_requested, review_request_removed/review_request_removed, review_requested/' \
+  "$STUB" >"$mut_stub"
+check "a reorder in one list only goes red" 1 "" \
+  types_in_sync "$CALLER" "$mut_stub"
+
 summary

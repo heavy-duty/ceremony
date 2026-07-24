@@ -10,7 +10,11 @@ on:
   issues:
     types: [opened, edited, assigned, unassigned, labeled, unlabeled, closed, reopened]
   pull_request_target:
-    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled]
+    # review_requested/review_request_removed wake the sweep that clears (or
+    # restores) blocker:unrequested — without them the one event that makes
+    # the label false could not clear it, and a quiet repo wore the red flag
+    # until the advisory cron (#137).
+    types: [opened, reopened, ready_for_review, converted_to_draft, synchronize, labeled, unlabeled, review_requested, review_request_removed]
 permissions:
   contents: read
   checks: read          # mergeability/check-rollup read for PR state
