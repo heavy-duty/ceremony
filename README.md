@@ -438,6 +438,6 @@ constraints — each bought with an incident, none of them safe to
 their war stories, in the headers of the scripts they bind:
 [release.yml](.github/workflows/release.yml#L1-L109),
 [lib/decide.sh](lib/decide.sh#L1-L74),
-[lib/facts.sh](lib/facts.sh#L1-L24), and the three
+[lib/facts.sh](lib/facts.sh#L1-L24), and the four
 [guard scripts](actions/). The comments are the documentation of record;
 this README is their operator-facing cut.
