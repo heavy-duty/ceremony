@@ -5,8 +5,9 @@ name: labels
 # The caller uses pull_request_target, not pull_request: every PR in this
 # family arrives from a fork, where pull_request runs with a READ-ONLY token
 # and cannot label anything. _target is safe in this workflow because no PR
-# code is ever checked out or executed — labeler reads changed paths via the
-# API, and reconcile checks out the BASE branch only. Keep it that way.
+# code is ever checked out or executed — scope reads changed paths and the
+# path mapping via the API and checks out only the ceremony implementation,
+# and reconcile checks out the BASE branch only. Keep it that way.
 #
 # There is no pull_request_review_target, so a review landing cannot wake this
 # workflow directly — and the */15 cron is advisory: GitHub deprioritises
@@ -28,7 +29,7 @@ env:
 
 jobs:
   scope:
-    # Not on labeled/unlabeled: those events change no paths, so labeler has
+    # Not on labeled/unlabeled: those events change no paths, so scope has
     # nothing new to derive — and label churn is precisely what they are.
     if: >-
       github.event_name == 'pull_request_target' &&
@@ -39,11 +40,41 @@ jobs:
       group: labels-scope-${{ github.event.pull_request.number }}
       cancel-in-progress: true
     steps:
-      - uses: actions/labeler@v5
+      # actions/labeler@v5 held this seat until #130. Even with
+      # sync-labels: false it wrote the WHOLE label set — PUT of
+      # (labels-fetched-at-job-start ∪ derived) — so a label applied while
+      # the job ran was silently removed: ceremony#128 lost its `release`,
+      # the merge door's declared-intent read, two seconds after the
+      # builder set it. v6/v7 write the same way, so the step was replaced
+      # rather than repinned. labels-scope reads the consumer's
+      # .github/labeler.yml and the changed paths via the API, and its
+      # only write is an additive POST of the derived scopes: a label
+      # applied mid-job survives by construction.
+      #
+      # Still no PR code: both checkouts below fetch the ceremony
+      # implementation only. The dogfood checkout rides github.sha — the
+      # base-branch commit the workflow file itself came from, so the
+      # script and workflow can never skew — and doubles as the #11
+      # bootstrap: ceremony's own labels must work before any release tag
+      # exists for the pinned checkout to fetch.
+      - uses: actions/checkout@v4
+        if: github.repository == 'heavy-duty/ceremony'
         with:
-          # labeler reads the consumer's .github/labeler.yml via the API
-          # additive only — a hand-applied scope must survive the machine
-          sync-labels: false
+          repository: ${{ github.repository }}
+          ref: ${{ github.sha }}
+      - uses: actions/checkout@v4
+        if: github.repository != 'heavy-duty/ceremony'
+        with:
+          repository: heavy-duty/ceremony
+          ref: ${{ env.CEREMONY_SELF_REF }}
+      - uses: ./actions/labels-scope
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          # the BASE branch commit — a PR must not label itself by editing
+          # the mapping it is judged by
+          CONFIG_REF: ${{ github.sha }}
 
   reconcile:
     runs-on: ubuntu-latest
@@ -55,9 +86,9 @@ jobs:
       cancel-in-progress: false
     steps:
       # pull_request_target is required for fork PR write permission. It is
-      # safe here because no PR code is ever checked out or executed: labeler
-      # reads paths via the API, and reconcile checks out the BASE branch only.
-      # Keep it that way.
+      # safe here because no PR code is ever checked out or executed:
+      # labels-scope reads the mapping and changed paths via the API, and
+      # reconcile checks out the BASE branch only. Keep it that way.
       - uses: actions/checkout@v4
         with:
           repository: ${{ github.repository }}

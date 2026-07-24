@@ -37,6 +37,9 @@ jobs:
           # absent; in CI a skip must be a failure, or the case could
           # quietly stop running (issue #3's test contract).
           CEREMONY_REQUIRE_NPM: 1
+          # Same contract for the yq-backed labeler.yml parse cases
+          # (#130): yq is preinstalled on ubuntu-latest, optional locally.
+          CEREMONY_REQUIRE_YQ: 1
         run: bash test/run.sh
 
   # The release exercise (issue #9's scratch caller) on every PR, so the

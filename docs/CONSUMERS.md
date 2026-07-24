@@ -276,6 +276,21 @@ never writes it). The consumer keeps its path mapping in
 `.github/labeler.yml` and its review panel plus scope taxonomy in
 `.github/labels.conf`.
 
+**Additive means additive** (unreleased — #130): the scope job's only label
+write is `POST /issues/{n}/labels`, which adds the derived scopes and removes
+nothing, so a label applied while the job runs survives it. Earlier tags used
+`actions/labeler@v5`, which — even under `sync-labels: false` — replaces the
+whole label set and silently drops a label written mid-job (ceremony#128 lost
+its `release` that way). With the same pin bump, `.github/labeler.yml` keeps
+its format but the accepted shape becomes exactly the one this guide has
+always shown: label → `changed-files` → `any-glob-to-any-file`, block or flow
+style, globs over `**`, `*` and `?` (`**` crosses `/`, the others do not; the
+whole path must match). Any other labeler key — `all-globs-to-all-files`,
+branch matchers, negations — fails the run loudly instead of being
+half-honoured. The reconcile sweep also warns (never sets) when a non-draft
+PR carries a bare `X.Y.Z` version differing from its base but no `release`
+label — the merge door would refuse that merge, and the sweep says so first.
+
 The complete caller is:
 
 ```yaml

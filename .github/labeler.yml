@@ -1,9 +1,11 @@
 # Path → scope:* mapping for the labels workflow's scope job
-# (actions/labeler@v5; additive only — the reusable workflow keeps
-# sync-labels off, so a hand-applied scope survives the machine). The scope
+# (actions/labels-scope since #130: it reads this mapping at the BASE ref
+# and its only write is an additive POST, so a label applied while the job
+# runs survives the machine — its predecessor, actions/labeler@v5, PUT the
+# whole set and clobbered ceremony#128's `release` mid-job). The scope
 # taxonomy itself lives in .github/labels.conf; LABELS.md carries the table
 # these globs implement. Scopes locate, they do not alert — a path that maps
-# to nothing is fine (labeler is advisory), so these rows chase the big
+# to nothing is fine (the mapping is advisory), so these rows chase the big
 # surfaces, not every file.
 scope:release-flow:
   - changed-files:
@@ -41,9 +43,11 @@ scope:labels:
           - .github/labeler.yml
           - .github/labels.conf
           - actions/labels-reconcile/**
+          - actions/labels-scope/**
           - LABELS.md
           - test/labels.test.sh
           - test/labels-reconcile.test.sh
+          - test/labels-scope.test.sh
 scope:docs:
   - changed-files:
       - any-glob-to-any-file:

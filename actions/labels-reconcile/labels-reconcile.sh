@@ -175,6 +175,7 @@ set_required_bots() { # the PR author is recused by construction
 # The state machine. Pure functions over these globals, set per PR:
 #   DRAFT        true|false
 #   HEAD_SHA     the PR's current head commit
+#   BASE_SHA     the PR's base branch head (the release-shape guard's ref)
 #   REQUESTED    newline-separated logins with a review currently requested
 #   REVIEWS_JSON JSON array of submitted (non-PENDING) reviews
 #   MERGEABLE    MERGEABLE | CONFLICTING | UNKNOWN  (GitHub's own verdict)
@@ -497,6 +498,38 @@ $(configured_label_rows "$LABELS_CONF")"
 
 has_label() { grep -qxF "$1" <<<"$LABELS"; }
 
+release_shape_warning() { # $1 = PR, $2 = head version, $3 = base version
+  # The #128 incident's guard (#130): a release-shaped PR — bare X.Y.Z at
+  # its head where the base says something else — reaching the board with
+  # no `release` label is exactly the state whose merge would publish
+  # nothing, so the sweep says so instead of letting the merge door
+  # discover it. A WARNING, never a write: `release` is declared intent,
+  # and the reconciler does not guess intent (LABELS.md's rule for
+  # `blocked`/`release`). An unreadable version blocks nothing — the
+  # sweep must not nag on facts it did not read.
+  local n="$1" head_ver="$2" base_ver="$3"
+  [ -n "$head_ver" ] || return 0
+  grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$' <<<"$head_ver" || return 0
+  [ "$head_ver" != "$base_ver" ] || return 0
+  echo "::warning::labels: #$n is release-shaped (version ${base_ver:-unreadable} -> $head_ver at its head) but carries no release label — the merge door reads that label as declared intent and will refuse without it; if this is the ceremony PR, apply release (#130; the #128 incident)"
+}
+
+tree_version() { # $1 = ref → that tree's version via the API, or nothing
+  # Both backends, no checkout: a VERSION file first, package.json's
+  # version field second (jq, not node — a read needs no npm machinery).
+  # Every failure path prints nothing: the caller treats "could not read"
+  # as "not release-shaped" rather than warning on a guess.
+  local ref="$1" ver
+  ver="$(gh api "repos/$REPO/contents/VERSION?ref=$ref" --jq '.content' 2>/dev/null \
+    | base64 -d 2>/dev/null | tr -d '[:space:]')"
+  if [ -z "$ver" ]; then
+    ver="$(gh api "repos/$REPO/contents/package.json?ref=$ref" --jq '.content' 2>/dev/null \
+      | base64 -d 2>/dev/null | jq -r '.version // empty' 2>/dev/null)"
+  fi
+  [ -z "$ver" ] || printf '%s\n' "$ver"
+  return 0
+}
+
 reconcile_pr() { # $1 = PR number; relies on the globals set from its fetch
   local n="$1" desired remove s args last_activity last_activity_epoch age
 
@@ -581,6 +614,13 @@ reconcile_pr() { # $1 = PR number; relies on the globals set from its fetch
     fi
   fi
 
+  # ---- the release-shape guard (#130): a warning, never a write --------
+  # Drafts are exempt (the build phase is the builder's); the version
+  # reads cost two API calls and only on PRs missing the label.
+  if [ "$DRAFT" != true ] && ! has_label release; then
+    release_shape_warning "$n" "$(tree_version "$HEAD_SHA")" "$(tree_version "$BASE_SHA")"
+  fi
+
   # ---- merge-next: cleared, never set ----------------------------------
   # Queue order is INTENT — which PR should land first is a judgement about
   # conflicts and dependencies that GitHub knows nothing about, so the
@@ -656,6 +696,7 @@ main() {
       AUTHOR="$(jq -r '.user.login' <<<"$PR_JSON")"
       set_required_bots "$AUTHOR"
       HEAD_SHA="$(jq -r '.head.sha' <<<"$PR_JSON")"
+      BASE_SHA="$(jq -r '.base.sha' <<<"$PR_JSON")"
       LABELS="$(jq -r '.labels[].name' <<<"$PR_JSON")"
       REQUESTED="$(jq -r '.requested_reviewers[].login' <<<"$PR_JSON")"
       # PENDING reviews are unsubmitted drafts in someone's browser — not a verdict
