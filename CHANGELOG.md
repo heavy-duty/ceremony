@@ -6,6 +6,7 @@ so entries say what changed, cite the issue, and stop.
 
 ## Unreleased
 
+- `lib/changelog.sh` + `bin/changelog-assemble` — read the `changelog.d/` fragments, assemble one release section (canonical group order, one shape per repo), and consume exactly what was published (#114).
 - BUILDER.md — the handed-off PR is the parked claim's fourth shape, its handoff is its declaration, and shape 2 covers the round awaiting its first verdicts (#109).
 - Changelog publication — count entries instead of bytes, refuse dangling grouped headings, and seed grouped re-arms with Added/Changed/Fixed (#98).
 - `labels-reconcile` — grant callers private-repo check reads and warn when an entire PR sweep is blind (#95).
