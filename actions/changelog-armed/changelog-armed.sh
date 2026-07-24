@@ -102,7 +102,10 @@ if [ -d "$fragments_dir" ]; then
   fi
 
   if [ -n "$fragments" ]; then
-    surviving="$(printf '%s' "$fragments" | paste -sd ', ' -)"
+    surviving="$(printf '%s\n' "$fragments" | awk '
+      BEGIN { separator = "" }
+      { printf "%s%s", separator, $0; separator = ", " }
+    ')"
     echo "changelog-armed: these fragments were not consumed: $surviving — re-run 'changelog-assemble $ver'" >&2
     exit 1
   fi
