@@ -73,6 +73,7 @@ jobs:
           fetch-depth: 0
       - uses: ./actions/changelog-armed
       - uses: ./actions/changelog-monotonic
+      - uses: ./actions/changelog-assembled
       - uses: ./actions/drill-recorded
       - uses: ./actions/runner-isolated
 
