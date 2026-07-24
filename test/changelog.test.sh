@@ -259,6 +259,78 @@ check "fragment predicate: a dangling grouped heading is refused, heading named"
   "has an empty heading: '### Added'" \
   changelog_fragment_problem "$PF/22.md"
 
+# --- the entry length bound (#167) -------------------------------------------
+
+# mkchars <n> — a run of n 'a's, for entries of exact constructed length.
+mkchars() {
+  awk -v n="$1" 'BEGIN { s = ""; while (length(s) < n) s = s "a"; print s }'
+}
+
+printf -- '- %s\n' "$(mkchars 301)" >"$PF/30.md"
+check "length bound: a 301-character entry is refused, fragment and length named" 1 \
+  "30.md' has a 301-character entry" \
+  changelog_fragment_problem "$PF/30.md"
+check "length bound: the refusal names the bound and the split fix" 1 \
+  "the bound is 300: split it into multiple '- ' entries in this same fragment" \
+  changelog_fragment_problem "$PF/30.md"
+
+printf -- '- %s\n' "$(mkchars 300)" >"$PF/31.md"
+check "length bound: an entry of exactly 300 passes" 0 "" \
+  changelog_fragment_problem "$PF/31.md"
+
+{
+  printf -- '- %s\n' "$(mkchars 150)"
+  printf -- '- %s\n' "$(mkchars 150)"
+  printf -- '- %s\n' "$(mkchars 150)"
+} >"$PF/32.md"
+check "length bound: several within-bound entries pass though the file totals over 300" 0 "" \
+  changelog_fragment_problem "$PF/32.md"
+
+{
+  printf -- '- %s\n' "$(mkchars 50)"
+  printf '  %s\n' "$(mkchars 50)"
+  printf '  %s\n' "$(mkchars 50)"
+  printf '  %s\n' "$(mkchars 50)"
+  printf '  %s\n' "$(mkchars 50)"
+} >"$PF/33.md"
+check "length bound: a ~250-character entry wrapped over four continuation lines passes" 0 "" \
+  changelog_fragment_problem "$PF/33.md"
+
+{
+  printf '### Added\n\n'
+  printf -- '- %s\n' "$(mkchars 300)"
+} >"$PF/34.md"
+check "length bound: a '### ' heading counts toward no entry — 300 under it still passes" 0 "" \
+  changelog_fragment_problem "$PF/34.md"
+
+{
+  printf '### Added\n\n'
+  printf -- '- %s\n' "$(mkchars 301)"
+} >"$PF/35.md"
+check "length bound: a grouped bullet is bounded the same as a flat one" 1 \
+  "35.md' has a 301-character entry" \
+  changelog_fragment_problem "$PF/35.md"
+
+{
+  printf -- '- %s\n' "$(mkchars 301)"
+  printf -- '- Short.\n'
+} >"$PF/36.md"
+assert_single_diagnosis() {
+  local count
+  count="$(changelog_fragment_problem "$PF/36.md" | grep -c "301-character")"
+  [ "$count" = 1 ] || {
+    printf 'wanted one diagnosis, got %s\n' "$count"
+    return 1
+  }
+}
+check "length bound: an over-bound entry mid-file is diagnosed exactly once" 0 "" \
+  assert_single_diagnosis
+
+check "length bound: published sections stay unvalidated — 0.3.0's over-bound entries red nothing" 0 "" \
+  changelog_section_problem "$ROOT/CHANGELOG.md" 0.3.0
+check "length bound: published sections stay unvalidated — 0.2.0 reds nothing either" 0 "" \
+  changelog_section_problem "$ROOT/CHANGELOG.md" 0.2.0
+
 # --- the assembler (#114) ----------------------------------------------------
 
 assert_assemble() {

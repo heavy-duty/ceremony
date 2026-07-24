@@ -279,6 +279,25 @@ printf '%s\n' "- Added fragment mode." >"$TMP/fragments-dev-flat/changelog.d/115
 check "fragment -dev + well-formed flat fragment passes" 0 "fragment mode" \
   in_tree fragments-dev-flat
 
+# The entry length bound (#167) reds the PR that writes the fragment, with
+# the shared changelog_fragment_problem diagnosis.
+fragment_tree fragments-dev-over-bound 1.2.4-dev <<'EOF'
+# Changelog
+
+## 1.2.3 — 2026-07-20
+
+- The shipped entry.
+EOF
+printf -- '- %s\n' \
+  "$(awk 'BEGIN { s = ""; while (length(s) < 301) s = s "a"; print s }')" \
+  >"$TMP/fragments-dev-over-bound/changelog.d/115.md"
+check "fragment mode refuses an over-bound entry, fragment and length named" 1 \
+  "115.md' has a 301-character entry" \
+  in_tree fragments-dev-over-bound
+check "fragment mode over-bound refusal names the bound and the split fix" 1 \
+  "the bound is 300: split it into multiple '- ' entries in this same fragment" \
+  in_tree fragments-dev-over-bound
+
 fragment_tree fragments-dev-grouped 1.2.4-dev <<'EOF'
 # Changelog
 
