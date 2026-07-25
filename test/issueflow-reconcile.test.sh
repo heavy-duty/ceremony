@@ -115,6 +115,12 @@ check "empty offsite timeline extracts nothing" 0 "" offsite_cross_referenced_pr
 # Invariant 3: blocked declarations parse and release only when all close.
 refs="$(blocked_references <<< $'Context #99. Blocked by #12 (first), #7 (second). Blocks #44.')"
 check "blocked declaration extracts only declared refs" 0 $'7\n12' printf '%s\n' "$refs"
+body='Part of #151. Blocked by #152. Blocked by #153. Blocked by #148 — prose. Blocks #155.'
+check "repeated blocker declarations retain every clause" 0 "" test \
+  "$(blocked_references <<<"$body")" = $'148\n152\n153'
+body=$'Note: restored because it is blocked by an operator act. See below.\nBlocked by #152, #153, #148.'
+check "earlier blocker prose does not hide a later declaration" 0 "" test \
+  "$(blocked_references <<<"$body")" = $'148\n152\n153'
 body=$'Blocked by #12 (first),\n#7 (soft-wrapped second). Blocks #44.'
 check "soft-wrapped blocker declaration retains continuation refs" 0 "" test \
   "$(blocked_references <<<"$body")" = $'7\n12'
@@ -143,6 +149,8 @@ check "slash-adjacent local references survive" 0 $'14\n15' \
 check "comma-adjacent local references survive" 0 $'11\n12' \
   blocked_references <<<"Blocked by #11, #12."
 check "open blocker keeps issue blocked" 0 "KEEP" blocked_decision "$refs" $'CLOSED\nOPEN'
+check "an open blocker in a repeated declaration prevents promotion" 0 "KEEP" \
+  blocked_decision $'12\n13' $'CLOSED\nOPEN'
 check "all closed blockers release issue" 0 "READY" blocked_decision "$refs" $'CLOSED\nCLOSED'
 check "missing blocked declaration is flagged" 0 "FLAG_UNPARSEABLE" blocked_decision "" ""
 check "unreadable blocker is flagged" 0 "FLAG_UNPARSEABLE" blocked_decision "12" "UNKNOWN"

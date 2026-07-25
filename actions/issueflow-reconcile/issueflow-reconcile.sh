@@ -178,26 +178,26 @@ issue_references() { # text on stdin -> LOCAL/CROSS<TAB>reference
 
 blocked_reference_records() { # body on stdin -> classified reference records
   # Dependency declarations sometimes soft-wrap after a comma. Continue
-  # through the first sentence terminator; if prose omits one, conservatively
-  # retain later references so ambiguity can keep an issue blocked, never
-  # promote it prematurely.
+  # each occurrence through its sentence terminator. Unioning every occurrence
+  # can over-retain historical prose, but a stale block is safer than falsely
+  # promoting work whose live dependency was dropped (#184).
   awk '
     {
-      line = $0
-      lower = tolower(line)
-      if (!active) {
-        marker = "blocked by"
-        start = index(lower, marker)
-        if (!start) next
-        line = substr(line, start + length(marker))
-        active = 1
+      body = body (NR == 1 ? "" : "\n") $0
+    }
+    END {
+      marker = "blocked by"
+      rest = body
+      while ((start = index(tolower(rest), marker))) {
+        clause = substr(rest, start + length(marker))
+        if (match(clause, /[.;]/)) {
+          print substr(clause, 1, RSTART - 1)
+          rest = substr(clause, RSTART + 1)
+        } else {
+          print clause
+          break
+        }
       }
-      if (line ~ /[.;]/) {
-        sub(/[.;].*/, "", line)
-        print line
-        exit
-      }
-      print line
     }
   ' | issue_references
 }
