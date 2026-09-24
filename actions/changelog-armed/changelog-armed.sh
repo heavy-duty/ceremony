@@ -67,12 +67,19 @@ here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/../../lib/version.sh"
 # shellcheck source=lib/changelog.sh
 . "$here/../../lib/changelog.sh"
+# shellcheck source=lib/track.sh
+. "$here/../../lib/track.sh"
+# A release track (#618): every file this guard reads resolves under the
+# track's directory, root-relative — the default track "." changes nothing.
+track="$(track_path_normalize "${TRACK_PATH:-.}")" || exit 1
+changelog="$(track_file "$track" "$changelog")"
+fragments_dir="$(track_file "$track" "$fragments_dir")"
 
 [ -f "$changelog" ] || { echo "changelog-armed: no such file: $changelog" >&2; exit 1; }
 
 # version_read refuses loudly on a missing or empty source; the wrapper line
 # names the guard so a workflow log shows which check refused.
-ver="$(version_read "$version_source")" || {
+ver="$(version_read "$version_source" "$track")" || {
   echo "changelog-armed: cannot read the version (version-source: $version_source)" >&2
   exit 1
 }

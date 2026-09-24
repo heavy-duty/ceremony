@@ -14,12 +14,20 @@ inputs:
     description: Directory of drill records, relative to the workspace
     required: false
     default: drills
+  path:
+    description: >-
+      The release track's directory, relative to the workspace (#618). The
+      other path inputs and the version source resolve under it. "." (the
+      default) is the repository's one track, exactly as before tracks.
+    required: false
+    default: "."
 runs:
   using: composite
   steps:
     - name: drill recorded
       shell: bash
       env:
+        TRACK_PATH: ${{ inputs.path }}
         DRILLS_DIR: ${{ inputs.drills-dir }}
         VERSION_SOURCE: ${{ inputs.version-source }}
       run: bash "$GITHUB_ACTION_PATH/drill-recorded.sh"

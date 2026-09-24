@@ -137,4 +137,30 @@ env_tree() {
 check "env vars drive the script the way action.yml does" 0 "evidence/0.9.0.md" \
   env_tree
 
+# --- release tracks (#618): the track's VERSION keys the track's drills/ -----
+
+# The root is a -dev tree with no drills; the admin track is a release.
+tree tracks 1.6.0-dev
+mkdir -p "$TMP/tracks/apps/admin"
+printf '2.1.0\n' >"$TMP/tracks/apps/admin/VERSION"
+track_in() { local dir="$1" track="$2"; shift 2; (cd "$TMP/$dir" && TRACK_PATH="$track" bash "$SCRIPT" "$@"); }
+
+check "a release track with no record fails, naming the track's drills path" 1 \
+  "apps/admin/drills/2.1.0.md" track_in tracks apps/admin
+mkdir -p "$TMP/tracks/apps/admin/drills"
+printf 'Drilled the admin.\n' >"$TMP/tracks/apps/admin/drills/2.1.0.md"
+check "a release track with its record passes" 0 "apps/admin/drills/2.1.0.md" \
+  track_in tracks apps/admin
+check "the default track beside it keys on the root VERSION" 0 "1.6.0-dev" \
+  track_in tracks .
+# root_record_only — move the admin's record to the root drills/ and run the
+# admin track: a record outside the track must not satisfy it.
+root_record_only() {
+  mkdir -p "$TMP/tracks/drills"
+  mv "$TMP/tracks/apps/admin/drills/2.1.0.md" "$TMP/tracks/drills/2.1.0.md"
+  track_in tracks apps/admin
+}
+check "a record in the root drills/ does not satisfy a track" 1 \
+  "apps/admin/drills/2.1.0.md" root_record_only
+
 summary

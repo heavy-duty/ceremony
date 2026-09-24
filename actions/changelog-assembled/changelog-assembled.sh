@@ -55,6 +55,13 @@ here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/changelog.sh
 . "$here/../../lib/changelog.sh"
 assemble="$here/../../bin/changelog-assemble"
+# shellcheck source=lib/track.sh
+. "$here/../../lib/track.sh"
+# A release track (#618): every file this guard reads resolves under the
+# track's directory, root-relative — the default track "." changes nothing.
+track="$(track_path_normalize "${TRACK_PATH:-.}")" || exit 1
+changelog="$(track_file "$track" "$changelog")"
+dir="$(track_file "$track" "$dir")"
 
 skip() {
   if [ "$strict" = "1" ]; then
@@ -115,7 +122,7 @@ fi
 
 # version_read refuses loudly on a missing or empty source; the wrapper line
 # names the guard so a workflow log shows which check refused.
-ver="$(version_read "$version_source")" || {
+ver="$(version_read "$version_source" "$track")" || {
   echo "changelog-assembled: cannot read the version (version-source: $version_source)" >&2
   exit 1
 }

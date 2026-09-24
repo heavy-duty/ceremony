@@ -232,6 +232,24 @@ bridge work that must rejoin the primary. A repository whose app and artifact
 are disjoint from the primary window forms a parallel track, while its bridge
 work stays in the primary window. (#248)
 
+## Release tracks
+
+One repository may ship more than one app, each on its own version line: a
+**release track** is a directory holding the app's own version source,
+`CHANGELOG.md`, `changelog.d/` and `drills/`, released under its own tag
+prefix (#618). The repository declares its tracks by calling the release
+workflow once per track, with `path` and `tag-prefix`
+([docs/CONSUMERS.md](docs/CONSUMERS.md)). A repository with one app has one
+track, the default one, and nothing here changes it.
+
+Each track runs its own ladder, its own release-candidate windows and its own
+membership record: a ceremony PR stamps exactly one track's `VERSION` and
+`CHANGELOG.md` and touches no other track's files. A second track's windows
+are a declared parallel track in the sense above — another artifact with a
+disjoint footprint — so the operator declares them at init like any other;
+work that changes both apps is bridge work, and it writes one fragment into
+each track's `changelog.d/` it changes.
+
 ## Flip mechanics
 
 To admit a member, delete or rewrite its literal, parseable

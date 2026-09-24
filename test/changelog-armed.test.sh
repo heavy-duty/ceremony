@@ -629,4 +629,44 @@ env_fragments() {
 }
 check "fragments-dir env var selects fragment mode" 0 "fragment mode" env_fragments
 
+# --- release tracks (#618): the track's VERSION keys the track's CHANGELOG.md -
+
+# The root is a released tree whose changelog is stamped; the admin track is a
+# -dev tree armed with Unreleased. Each track is judged on its own files only.
+tree tracks 1.6.0 <<'EOF'
+# Changelog
+
+## 1.6.0 — 2026-09-24
+
+- The site's entry.
+EOF
+mkdir -p "$TMP/tracks/apps/admin"
+printf '2.1.1-dev\n' >"$TMP/tracks/apps/admin/VERSION"
+cat >"$TMP/tracks/apps/admin/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## Unreleased
+
+- The admin's pending entry.
+
+## 2.1.0 — 2026-09-24
+
+- The admin's shipped entry.
+EOF
+track_in() { local dir="$1" track="$2"; shift 2; (cd "$TMP/$dir" && TRACK_PATH="$track" bash "$SCRIPT" "$@"); }
+
+check "a -dev track armed with Unreleased passes beside a released root" 0 "agrees" \
+  track_in tracks apps/admin
+check "the root track is still judged on the root files" 0 "agrees" \
+  track_in tracks .
+printf '1.6.1-dev\n' >"$TMP/tracks/VERSION"
+check "a -dev root with a stamped top still fails beside an armed track" 1 "development tree" \
+  track_in tracks .
+check "the track's verdict ignores the root's state" 0 "agrees" \
+  track_in tracks apps/admin
+mkdir -p "$TMP/tracks/apps/other"
+printf '0.1.0-dev\n' >"$TMP/tracks/apps/other/VERSION"
+check "a missing track changelog names the track's path" 1 "apps/other/CHANGELOG.md" \
+  track_in tracks apps/other
+
 summary

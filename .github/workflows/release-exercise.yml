@@ -42,6 +42,16 @@ jobs:
     with:
       version-source: file
 
+  call-track:
+    # The same dry parse with a release track's inputs (#618): a green run
+    # proves `path` and `tag-prefix` are part of the input contract.
+    uses: ./.github/workflows/release.yml
+    with:
+      version-source: file
+      path: apps/admin
+      tag-prefix: admin-
+      non-release-namespace: "[0-9]*"
+
   step-replay:
     runs-on: ubuntu-latest
     env:
@@ -49,6 +59,10 @@ jobs:
       # caller deliberately passes no merged-sha, so its selected head is the
       # run head and the copied early steps exercise that dry shape.
       MERGE_SHA: ${{ github.sha }}
+      # release.yml's workflow-level env from its two track inputs (#618),
+      # at their defaults: the replay's fixture is the default track.
+      TRACK_PATH: "."
+      TAG_PREFIX: ""
     strategy:
       matrix:
         # release.yml keys its bypass on `github.repository ==
@@ -105,6 +119,15 @@ jobs:
           fi
           mkdir -p "$RUNNER_TEMP/release-assets"
           echo "RELEASE_ASSETS_DIR=$RUNNER_TEMP/release-assets" >> "$GITHUB_ENV"
+      - name: resolve the release track — its directory and tag prefix
+        # release.yml's step verbatim (#618).
+        run: |
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          track="$(track_path_normalize "$TRACK_PATH")"
+          track_prefix_check "$TAG_PREFIX"
+          echo "TRACK_PATH=$track" >> "$GITHUB_ENV"
+          echo "release track: path '$track', tag prefix '$TAG_PREFIX'"
       - name: construct the fixture consumer tree and the gh stub
         # The fixture release.yml's steps run against (below): a base at
         # 0.6.9-dev armed the fragment way (#112) — changelog.d/ with its
@@ -205,15 +228,19 @@ jobs:
           . "$CEREMONY_DIR/lib/changelog.sh"
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/version.sh"
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          changelog="$(track_file "$TRACK_PATH" CHANGELOG.md)"
           if version_is_rc "$VER"; then
-            bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check > "$RUNNER_TEMP/notes.md"
+            bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check \
+              --changelog "$changelog" --dir "$(track_file "$TRACK_PATH" changelog.d)" > "$RUNNER_TEMP/notes.md"
           else
-            if ! diagnosis="$(changelog_section_problem CHANGELOG.md "$VER")"; then
-              echo "CHANGELOG.md has no '## $VER' section at the merge commit — the ceremony PR must stamp it; refusing to publish an empty release" >&2
+            if ! diagnosis="$(changelog_section_problem "$changelog" "$VER")"; then
+              echo "$changelog has no '## $VER' section at the merge commit — the ceremony PR must stamp it; refusing to publish an empty release" >&2
               printf '%s\n' "$diagnosis" >&2
               exit 1
             fi
-            changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
+            changelog_section "$changelog" "$VER" > "$RUNNER_TEMP/notes.md"
           fi
           cat "$RUNNER_TEMP/notes.md"
       - name: an entry-less stamped fixture is refused by the notes predicate
@@ -286,6 +313,9 @@ jobs:
 
           publish_fixture() {
             # release.yml's publish body, with assets empty in this fixture.
+            # TAG is the facts step's output there; the default track's tag
+            # is the bare version (#618).
+            TAG="$VER"
             # shellcheck source=/dev/null
             . "$CEREMONY_DIR/lib/version.sh"
             release_flags=()
@@ -293,7 +323,7 @@ jobs:
               release_flags+=(--prerelease)
             fi
             assets=()
-            gh release create "$VER" --verify-tag --title "$VER" \
+            gh release create "$TAG" --verify-tag --title "$TAG" \
               --notes-file "$RUNNER_TEMP/notes.md" -R "$GITHUB_REPOSITORY" \
               "${release_flags[@]}" \
               "${assets[@]}"
@@ -323,10 +353,14 @@ jobs:
           . "$CEREMONY_DIR/lib/changelog.sh"
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/version.sh"
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          changelog="$(track_file "$TRACK_PATH" CHANGELOG.md)"
           if version_is_rc "$VER"; then
-            bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check > "$RUNNER_TEMP/notes.md"
+            bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check \
+              --changelog "$changelog" --dir "$(track_file "$TRACK_PATH" changelog.d)" > "$RUNNER_TEMP/notes.md"
           else
-            changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
+            changelog_section "$changelog" "$VER" > "$RUNNER_TEMP/notes.md"
           fi
           git tag "$VER"
           publish_fixture
@@ -374,6 +408,199 @@ jobs:
           printf '%s\n' "$expected_notes" | diff -u - "$EXERCISE_RELEASES/$VER.notes"
           [ "$(cat VERSION)" = "$before_version" ]
           echo "rc replay ($CEREMONY_DIR): merge/tag prereleases and final promotion carried real release facts"
+
+      - name: two release tracks in one repository — merge door, re-arm, tag doors (#618)
+        # One merge that releases the admin track under apps/admin while the
+        # default track at the root is ordinary work: facts and decide per
+        # track, then release.yml's notes, publish and re-arm bodies with the
+        # track's environment (the fetch and push left out, as above), then
+        # both tag doors' classification. The gh stub above records the
+        # release; the fixture proves only apps/admin/VERSION moved.
+        run: |
+          fixture="$RUNNER_TEMP/tracks-fixture"
+          git init -q "$fixture"
+          cd "$fixture"
+          git config user.email fixture@example.invalid
+          git config user.name fixture
+          # The default track at the root, armed with a pending fragment, and
+          # an admin track under apps/admin with its own version line.
+          printf '1.6.0-dev\n' > VERSION
+          printf '# Changelog\n\n## 1.5.10 — 2026-09-24\n\n- The site shipped.\n' > CHANGELOG.md
+          mkdir changelog.d
+          printf '# fixture marker\n' > changelog.d/README.md
+          printf -- '- A site change still pending (#7).\n' > changelog.d/7.md
+          mkdir -p apps/admin/changelog.d
+          printf '2.0.1-dev\n' > apps/admin/VERSION
+          printf '# Changelog\n\n## 2.0.0 — 2026-09-01\n\n- The admin shipped.\n' > apps/admin/CHANGELOG.md
+          printf '# fixture marker\n' > apps/admin/changelog.d/README.md
+          printf -- '- The admin fixed a thing (#31).\n' > apps/admin/changelog.d/31.md
+          git add -A
+          git commit -qm base
+          base="$(git rev-parse HEAD)"
+          # The admin track's ceremony PR, run from the root with its paths.
+          printf '2.0.1\n' > apps/admin/VERSION
+          bash "$CEREMONY_DIR/bin/changelog-assemble" 2.0.1 2026-09-24 \
+            --changelog apps/admin/CHANGELOG.md --dir apps/admin/changelog.d
+          git add -A
+          git commit -qm "release: admin-2.0.1"
+          head="$(git rev-parse HEAD)"
+
+          # facts → decide for each track on the same merge: the admin track
+          # is a ceremony, the default track beside it is ordinary work.
+          track_facts() { # track_facts <path> <prefix> <key>
+            env MERGE_SHA="$head" EVENT_BEFORE="$base" VERSION_SOURCE=file \
+              TRACK_PATH="$1" TAG_PREFIX="$2" bash "$CEREMONY_DIR/lib/facts.sh" \
+              | sed -n "s/^$3=//p"
+          }
+          track_verdict() { # track_verdict <path> <prefix>
+            env VER="$(track_facts "$1" "$2" ver)" BASE_VER="$(track_facts "$1" "$2" base_ver)" \
+              RELEASED="$(track_facts "$1" "$2" released)" LABELED="$(track_facts "$1" "$2" labeled)" \
+              bash "$CEREMONY_DIR/lib/decide.sh" | sed -n 's/^ceremony=//p'
+          }
+          [ "$(track_facts apps/admin admin- ver)" = 2.0.1 ]
+          [ "$(track_facts apps/admin admin- base_ver)" = 2.0.1-dev ]
+          [ "$(track_facts apps/admin admin- tag)" = admin-2.0.1 ]
+          [ "$(track_verdict apps/admin admin-)" = yes ]
+          [ "$(track_facts . "" ver)" = 1.6.0-dev ]
+          [ "$(track_verdict . "")" = no ]
+
+          # The admin track's notes, publish and re-arm: release.yml's bodies
+          # with the track's environment (the fetch and push left out).
+          TRACK_PATH=apps/admin
+          TAG_PREFIX=admin-
+          VER=2.0.1
+          TAG=admin-2.0.1
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/changelog.sh"
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/version.sh"
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          changelog="$(track_file "$TRACK_PATH" CHANGELOG.md)"
+          changelog_section "$changelog" "$VER" > "$RUNNER_TEMP/notes.md"
+          grep -F 'The admin fixed a thing' "$RUNNER_TEMP/notes.md"
+          if grep -F 'site change' "$RUNNER_TEMP/notes.md"; then
+            echo "the admin's notes carried the site's fragment" >&2
+            exit 1
+          fi
+          git tag "$TAG"
+          gh release create "$TAG" --verify-tag --title "$TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" -R "$GITHUB_REPOSITORY"
+          grep -Fx 'isPrerelease=false' "$EXERCISE_RELEASES/$TAG.meta"
+          diff -u "$RUNNER_TEMP/notes.md" "$EXERCISE_RELEASES/$TAG.notes"
+          next="$(version_next_dev "$VER")"
+          next_name="$(track_tag "$TAG_PREFIX" "$next")"
+          version_write file "$next" "$TRACK_PATH"
+          git add "$(track_file "$TRACK_PATH" VERSION)"
+          git commit -qm "chore: bump main to $next_name — re-arm after publishing $TAG"
+          [ "$(cat apps/admin/VERSION)" = 2.0.2-dev ]
+          [ "$(cat VERSION)" = 1.6.0-dev ]
+          [ "$(git show --format= --name-only HEAD)" = apps/admin/VERSION ]
+          git log -1 --format=%s | grep -F 'bump main to admin-2.0.2-dev — re-arm after publishing admin-2.0.1'
+          [ -f changelog.d/7.md ]
+
+          # The tag doors: each track releases its own tags and no-ops on the
+          # other's, declared through non-release-namespace.
+          classify() { env TAG="$1" TAG_PREFIX="$2" NON_RELEASE_NAMESPACE="$3" bash "$CEREMONY_DIR/lib/tag-classify.sh"; }
+          [ "$(classify admin-2.0.1 admin- '[0-9]*')" = classification=release ]
+          [ "$(classify 1.6.0 admin- '[0-9]*' 2>/dev/null)" = classification=non-release ]
+          [ "$(classify admin-2.0.1 '' 'admin-*' 2>/dev/null)" = classification=non-release ]
+          [ "$(classify 1.6.0 '' 'admin-*')" = classification=release ]
+          echo "admin-2.0.1" > "$RUNNER_TEMP/admin-tag"
+
+          # The other way round: the default track's ceremony on the next
+          # merge, with the admin track re-armed beside it.
+          base="$(git rev-parse HEAD)"
+          printf '1.6.0\n' > VERSION
+          bash "$CEREMONY_DIR/bin/changelog-assemble" 1.6.0 2026-09-25
+          git add -A
+          git commit -qm "release: 1.6.0"
+          head="$(git rev-parse HEAD)"
+          [ "$(track_verdict . "")" = yes ]
+          [ "$(track_facts . "" tag)" = 1.6.0 ]
+          [ "$(track_verdict apps/admin admin-)" = no ]
+          TRACK_PATH=.
+          TAG_PREFIX=
+          VER=1.6.0
+          TAG=1.6.0
+          changelog="$(track_file "$TRACK_PATH" CHANGELOG.md)"
+          changelog_section "$changelog" "$VER" > "$RUNNER_TEMP/notes.md"
+          grep -F 'A site change still pending' "$RUNNER_TEMP/notes.md"
+          git tag "$TAG"
+          gh release create "$TAG" --verify-tag --title "$TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" -R "$GITHUB_REPOSITORY"
+          version_write file "$(version_next_dev "$VER")" "$TRACK_PATH"
+          git add "$(track_file "$TRACK_PATH" VERSION)"
+          git commit -qm "chore: bump main to $(track_tag "$TAG_PREFIX" "$(version_next_dev "$VER")") — re-arm after publishing $TAG"
+          [ "$(cat VERSION)" = 1.6.1-dev ]
+          [ "$(cat apps/admin/VERSION)" = 2.0.2-dev ]
+          [ "$(git show --format= --name-only HEAD)" = VERSION ]
+
+          # A prefixed release candidate: tag-only, notes from the track's
+          # surviving fragments, a prerelease, and the rc re-arm.
+          printf -- '- The admin candidate entry (#40).\n' > apps/admin/changelog.d/40.md
+          git add -A
+          git commit -qm "admin work"
+          base="$(git rev-parse HEAD)"
+          printf '2.1.0-rc1\n' > apps/admin/VERSION
+          git add -A
+          git commit -qm "release: admin-2.1.0-rc1"
+          head="$(git rev-parse HEAD)"
+          [ "$(track_facts apps/admin admin- tag)" = admin-2.1.0-rc1 ]
+          [ "$(track_verdict apps/admin admin-)" = yes ]
+          TRACK_PATH=apps/admin
+          TAG_PREFIX=admin-
+          VER=2.1.0-rc1
+          TAG=admin-2.1.0-rc1
+          changelog="$(track_file "$TRACK_PATH" CHANGELOG.md)"
+          bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check \
+            --changelog "$changelog" --dir "$(track_file "$TRACK_PATH" changelog.d)" > "$RUNNER_TEMP/notes.md"
+          grep -F 'The admin candidate entry' "$RUNNER_TEMP/notes.md"
+          [ "$(classify "$TAG" admin- '[0-9]*')" = classification=release ]
+          git tag "$TAG"
+          gh release create "$TAG" --verify-tag --title "$TAG" \
+            --notes-file "$RUNNER_TEMP/notes.md" -R "$GITHUB_REPOSITORY" --prerelease
+          grep -Fx 'isPrerelease=true' "$EXERCISE_RELEASES/$TAG.meta"
+          version_write file "$(version_next_dev "$VER")" "$TRACK_PATH"
+          [ "$(cat apps/admin/VERSION)" = 2.1.0-rc2-dev ]
+          [ "$(cat VERSION)" = 1.6.1-dev ]
+          echo "two-track replay ($CEREMONY_DIR): admin-2.0.1, then 1.6.0, then the prerelease admin-2.1.0-rc1 — each re-armed only its own track"
+      - name: write a fixture artifact hook that asserts its inputs and environment
+        # A stand-in for a consumer's .github/actions/release-artifact: it
+        # fails unless it sees the bare version as input and the track's tag
+        # and directory in its environment (#618).
+        run: |
+          mkdir -p .github/actions/release-artifact
+          cat > .github/actions/release-artifact/action.yml <<'EOF'
+          name: fixture release artifact
+          inputs:
+            version:
+              required: true
+          runs:
+            using: composite
+            steps:
+              - shell: bash
+                env:
+                  VERSION: @@INPUT_VERSION@@
+                run: |
+                  [ "$VERSION" = 2.0.1 ] || { echo "version: got '$VERSION'" >&2; exit 1; }
+                  [ "$RELEASE_TAG" = admin-2.0.1 ] || { echo "RELEASE_TAG: got '$RELEASE_TAG'" >&2; exit 1; }
+                  [ "$RELEASE_TRACK_PATH" = apps/admin ] || { echo "RELEASE_TRACK_PATH: got '$RELEASE_TRACK_PATH'" >&2; exit 1; }
+                  echo "hook saw version $VERSION, tag $RELEASE_TAG, track $RELEASE_TRACK_PATH"
+          EOF
+          # The input expression goes in after the heredoc: written inline,
+          # the runner would expand it in THIS step, where it is empty.
+          sed -i 's/@@INPUT_VERSION@@/$\{\{ inputs.version \}\}/' .github/actions/release-artifact/action.yml
+          grep -F 'inputs.version }}' .github/actions/release-artifact/action.yml
+      - name: artifact hook — the consumer's own release-artifact action
+        # release.yml's hook step, with the two-track fixture's admin release
+        # standing in for the facts step's outputs and the track's env.
+        uses: ./.github/actions/release-artifact
+        env:
+          RELEASE_TAG: admin-2.0.1
+          RELEASE_TRACK_PATH: apps/admin
+        with:
+          version: "2.0.1"
 
   fixture-chain:
     runs-on: ubuntu-latest

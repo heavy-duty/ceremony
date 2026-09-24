@@ -147,6 +147,27 @@ on:
         type: string
         required: false
         default: ""
+      path:
+        description: >-
+          The release track's directory, relative to the repository root
+          (#618): its VERSION or package.json, CHANGELOG.md and changelog.d/
+          live there, and the re-arm writes there. "." (the default) is the
+          repository's one track, exactly as before tracks. Call this
+          workflow once per track to release several apps from one
+          repository.
+        type: string
+        required: false
+        default: "."
+      tag-prefix:
+        description: >-
+          Prepended, literally, to the version for the track's tags and
+          release names (#618): "admin-" releases admin-2.1.0. Empty (the
+          default) keeps bare X.Y.Z tags. Declare the other tracks' tags
+          through non-release-namespace so this track's tag door no-ops on
+          them.
+        type: string
+        required: false
+        default: ""
 
 env:
   # A called workflow arrives without its repository. This literal pin is
@@ -159,6 +180,8 @@ env:
   # references.
   CEREMONY_SELF_REF: "0.7.8"
   VERSION_SOURCE: ${{ inputs.version-source }}
+  TRACK_PATH: ${{ inputs.path }}
+  TAG_PREFIX: ${{ inputs.tag-prefix }}
 
 jobs:
   release-on-merge:
@@ -214,6 +237,18 @@ jobs:
           fi
           mkdir -p "$RUNNER_TEMP/release-assets"
           echo "RELEASE_ASSETS_DIR=$RUNNER_TEMP/release-assets" >> "$GITHUB_ENV"
+      - name: resolve the release track — its directory and tag prefix
+        # One track per call (#618). The path is normalized once, here, and
+        # every later step reads the canonical form from the environment; a
+        # path outside the repository or a prefix that is not a literal tag
+        # prefix refuses before anything is read or created.
+        run: |
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          track="$(track_path_normalize "$TRACK_PATH")"
+          track_prefix_check "$TAG_PREFIX"
+          echo "TRACK_PATH=$track" >> "$GITHUB_ENV"
+          echo "release track: path '$track', tag prefix '$TAG_PREFIX'"
       - name: gather the facts — version, base version, released, labeled
         id: facts
         env:
@@ -246,45 +281,49 @@ jobs:
           . "$CEREMONY_DIR/lib/changelog.sh"
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/version.sh"
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          changelog="$(track_file "$TRACK_PATH" CHANGELOG.md)"
           if version_is_rc "$VER"; then
-            bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check > "$RUNNER_TEMP/notes.md"
+            bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check \
+              --changelog "$changelog" --dir "$(track_file "$TRACK_PATH" changelog.d)" > "$RUNNER_TEMP/notes.md"
           else
-            if ! diagnosis="$(changelog_section_problem CHANGELOG.md "$VER")"; then
-              echo "CHANGELOG.md has no '## $VER' section at the merge commit — the ceremony PR must stamp it; refusing to publish an empty release" >&2
+            if ! diagnosis="$(changelog_section_problem "$changelog" "$VER")"; then
+              echo "$changelog has no '## $VER' section at the merge commit — the ceremony PR must stamp it; refusing to publish an empty release" >&2
               printf '%s\n' "$diagnosis" >&2
               exit 1
             fi
-            changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
+            changelog_section "$changelog" "$VER" > "$RUNNER_TEMP/notes.md"
           fi
           cat "$RUNNER_TEMP/notes.md"
       - name: nothing may exist yet — no tag, no release (re-runs refuse loudly)
         if: steps.decide.outputs.ceremony == 'yes'
         env:
           GH_TOKEN: ${{ github.token }}
-          VER: ${{ steps.facts.outputs.ver }}
+          TAG: ${{ steps.facts.outputs.tag }}
         # What makes a re-run of a completed ceremony refuse instead of
         # clobber, and what catches a manual tag racing the merge.
         run: |
-          if git ls-remote --exit-code origin "refs/tags/$VER" >/dev/null 2>&1; then
-            echo "tag '$VER' already exists — this release already happened, or a manual tag won the race; refusing to re-release, creating nothing." >&2
+          if git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag '$TAG' already exists — this release already happened, or a manual tag won the race; refusing to re-release, creating nothing." >&2
             exit 1
           fi
-          if gh release view "$VER" -R "$GITHUB_REPOSITORY" --json name >/dev/null 2>&1; then
-            echo "release '$VER' already exists — refusing to re-release, creating nothing." >&2
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json name >/dev/null 2>&1; then
+            echo "release '$TAG' already exists — refusing to re-release, creating nothing." >&2
             exit 1
           fi
       - name: tag the merge commit — same job as the publish, on purpose
         if: steps.decide.outputs.ceremony == 'yes'
         env:
           GH_TOKEN: ${{ github.token }}
-          VER: ${{ steps.facts.outputs.ver }}
+          TAG: ${{ steps.facts.outputs.tag }}
           MERGE_SHA: ${{ env.MERGE_SHA }}
         # A GITHUB_TOKEN-created tag triggers nothing (anti-recursion), so
         # the tag door cannot double-fire off this tag — and this job is
         # the only chance to publish (the sources' central comment).
         run: |
           gh api "repos/$GITHUB_REPOSITORY/git/refs" \
-            -f "ref=refs/tags/$VER" -f "sha=$MERGE_SHA"
+            -f "ref=refs/tags/$TAG" -f "sha=$MERGE_SHA"
       - name: artifact hook — the consumer's own release-artifact action
         # Runs after the tag exists, before the publish (#1 D4). The local
         # path resolves in the consumer checkout at the workspace root —
@@ -293,6 +332,12 @@ jobs:
         # non-zero to abort the release (docs/CONSUMERS.md).
         if: steps.decide.outputs.ceremony == 'yes' && hashFiles('.github/actions/release-artifact/action.yml') != ''
         uses: ./.github/actions/release-artifact
+        env:
+          # The track (#618), for a hook serving several: the tag this
+          # release publishes and the track's directory. `version` stays the
+          # bare version, so a single-track hook needs no change.
+          RELEASE_TAG: ${{ steps.facts.outputs.tag }}
+          RELEASE_TRACK_PATH: ${{ env.TRACK_PATH }}
         with:
           version: ${{ steps.facts.outputs.ver }}
       - name: publish the release
@@ -300,6 +345,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VER: ${{ steps.facts.outputs.ver }}
+          TAG: ${{ steps.facts.outputs.tag }}
         run: |
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/version.sh"
@@ -311,7 +357,7 @@ jobs:
           for f in "$RELEASE_ASSETS_DIR"/*; do
             if [ -e "$f" ]; then assets+=("$f"); fi
           done
-          gh release create "$VER" --verify-tag --title "$VER" \
+          gh release create "$TAG" --verify-tag --title "$TAG" \
             --notes-file "$RUNNER_TEMP/notes.md" -R "$GITHUB_REPOSITORY" \
             "${release_flags[@]}" \
             "${assets[@]}"
@@ -328,10 +374,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VER: ${{ steps.facts.outputs.ver }}
+          TAG: ${{ steps.facts.outputs.tag }}
         run: |
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/version.sh"
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
           next="$(version_next_dev "$VER")"
+          # The track's name for the re-armed version (#618): bare on the
+          # default track, prefixed on another, so two tracks' re-arms read
+          # apart in main's history.
+          next_name="$(track_tag "$TAG_PREFIX" "$next")"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           # main may have moved since the merge; release+1 lands on the
@@ -339,23 +392,23 @@ jobs:
           # comment).
           git fetch origin main
           git checkout -B main origin/main
-          version_write "$VERSION_SOURCE" "$next"
+          version_write "$VERSION_SOURCE" "$next" "$TRACK_PATH"
           # NEVER `git add -A` here: .ceremony-src sits UNTRACKED in this
           # workspace on the consumer path, and -A would commit the whole
           # ceremony checkout into the consumer's main. Exactly the files
-          # the bump wrote, nothing else.
+          # the bump wrote, nothing else — inside the track's directory.
           case "$VERSION_SOURCE" in
-            file) git add VERSION ;;
-            package-json) git add package.json package-lock.json ;;
+            file) git add "$(track_file "$TRACK_PATH" VERSION)" ;;
+            package-json) git add "$(track_file "$TRACK_PATH" package.json)" "$(track_file "$TRACK_PATH" package-lock.json)" ;;
           esac
-          git commit -m "chore: bump main to $next — re-arm after publishing $VER"
+          git commit -m "chore: bump main to $next_name — re-arm after publishing $TAG"
           if ! git push origin main; then
             echo "direct push refused (branch protection?) — opening the bump PR instead" >&2
-            git checkout -b "chore/bump-$next"
-            git push origin "chore/bump-$next"
-            gh pr create -R "$GITHUB_REPOSITORY" --head "chore/bump-$next" \
-              --title "chore: bump main to $next" \
-              --body "The post-release re-arm, opened by release.yml because the direct push was refused. One version bump, nothing else — never leave main armed to impersonate $VER." \
+            git checkout -b "chore/bump-$next_name"
+            git push origin "chore/bump-$next_name"
+            gh pr create -R "$GITHUB_REPOSITORY" --head "chore/bump-$next_name" \
+              --title "chore: bump main to $next_name" \
+              --body "The post-release re-arm, opened by release.yml because the direct push was refused. One version bump, nothing else — never leave main armed to impersonate $TAG." \
               --label release
           fi
 
@@ -384,11 +437,24 @@ jobs:
           fi
           mkdir -p "$RUNNER_TEMP/release-assets"
           echo "RELEASE_ASSETS_DIR=$RUNNER_TEMP/release-assets" >> "$GITHUB_ENV"
+      - name: resolve the release track — its directory and tag prefix
+        # One track per call (#618). The path is normalized once, here, and
+        # every later step reads the canonical form from the environment; a
+        # path outside the repository or a prefix that is not a literal tag
+        # prefix refuses before anything is read or created.
+        run: |
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          track="$(track_path_normalize "$TRACK_PATH")"
+          track_prefix_check "$TAG_PREFIX"
+          echo "TRACK_PATH=$track" >> "$GITHUB_ENV"
+          echo "release track: path '$track', tag prefix '$TAG_PREFIX'"
       - name: classify release tag or declared non-release namespace
         id: classify
         env:
           TAG: ${{ github.ref_name }}
           NON_RELEASE_NAMESPACE: ${{ inputs.non-release-namespace }}
+          TAG_PREFIX: ${{ inputs.tag-prefix }}
         run: bash "$CEREMONY_DIR/lib/tag-classify.sh" >> "$GITHUB_OUTPUT"
       - name: the tag must name the tree's own version
         id: assert
@@ -396,13 +462,21 @@ jobs:
         run: |
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/version.sh"
-          ver="$(version_read "$VERSION_SOURCE")"
-          if [ "$GITHUB_REF_NAME" != "$ver" ]; then
-            echo "tag '$GITHUB_REF_NAME' does not match the tree's version '$ver' — creating nothing." >&2
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          ver="$(version_read "$VERSION_SOURCE" "${TRACK_PATH:-.}")"
+          tag="$(track_tag "${TAG_PREFIX:-}" "$ver")"
+          if [ "$GITHUB_REF_NAME" != "$tag" ]; then
+            if [ -n "${TAG_PREFIX:-}" ]; then
+              echo "tag '$GITHUB_REF_NAME' does not match the track's tag '$tag' (version '$ver' in '$TRACK_PATH') — creating nothing." >&2
+            else
+              echo "tag '$GITHUB_REF_NAME' does not match the tree's version '$ver' — creating nothing." >&2
+            fi
             echo "A release is a PR, then a tag: the release PR bumps the version and stamps the changelog; the tag goes on its MERGE commit. Delete this tag and re-tag the right commit." >&2
             exit 1
           fi
           echo "ver=$ver" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
       - name: release notes — final section or rc fragments
         if: steps.classify.outputs.classification != 'non-release'
         env:
@@ -412,15 +486,19 @@ jobs:
           . "$CEREMONY_DIR/lib/changelog.sh"
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/version.sh"
+          # shellcheck source=/dev/null
+          . "$CEREMONY_DIR/lib/track.sh"
+          changelog="$(track_file "$TRACK_PATH" CHANGELOG.md)"
           if version_is_rc "$VER"; then
-            bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check > "$RUNNER_TEMP/notes.md"
+            bash "$CEREMONY_DIR/bin/changelog-assemble" "$VER" --check \
+              --changelog "$changelog" --dir "$(track_file "$TRACK_PATH" changelog.d)" > "$RUNNER_TEMP/notes.md"
           else
-            if ! diagnosis="$(changelog_section_problem CHANGELOG.md "$VER")"; then
-              echo "CHANGELOG.md has no '## $VER' section — run changelog-assemble in the release PR before tagging; refusing to publish an empty release" >&2
+            if ! diagnosis="$(changelog_section_problem "$changelog" "$VER")"; then
+              echo "$changelog has no '## $VER' section — run changelog-assemble in the release PR before tagging; refusing to publish an empty release" >&2
               printf '%s\n' "$diagnosis" >&2
               exit 1
             fi
-            changelog_section CHANGELOG.md "$VER" > "$RUNNER_TEMP/notes.md"
+            changelog_section "$changelog" "$VER" > "$RUNNER_TEMP/notes.md"
           fi
           cat "$RUNNER_TEMP/notes.md"
       - name: artifact hook — the consumer's own release-artifact action
@@ -428,6 +506,9 @@ jobs:
         # the same contract as the merge door's twin step.
         if: steps.classify.outputs.classification != 'non-release' && hashFiles('.github/actions/release-artifact/action.yml') != ''
         uses: ./.github/actions/release-artifact
+        env:
+          RELEASE_TAG: ${{ steps.assert.outputs.tag }}
+          RELEASE_TRACK_PATH: ${{ env.TRACK_PATH }}
         with:
           version: ${{ steps.assert.outputs.ver }}
       - name: publish the release
@@ -435,6 +516,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VER: ${{ steps.assert.outputs.ver }}
+          TAG: ${{ steps.assert.outputs.tag }}
         run: |
           # shellcheck source=/dev/null
           . "$CEREMONY_DIR/lib/version.sh"
@@ -446,7 +528,7 @@ jobs:
           for f in "$RELEASE_ASSETS_DIR"/*; do
             if [ -e "$f" ]; then assets+=("$f"); fi
           done
-          gh release create "$VER" --verify-tag --title "$VER" \
+          gh release create "$TAG" --verify-tag --title "$TAG" \
             --notes-file "$RUNNER_TEMP/notes.md" -R "$GITHUB_REPOSITORY" \
             "${release_flags[@]}" \
             "${assets[@]}"

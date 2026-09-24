@@ -17,12 +17,20 @@ inputs:
     description: Fragment directory whose presence selects fragment mode
     required: false
     default: changelog.d
+  path:
+    description: >-
+      The release track's directory, relative to the workspace (#618). The
+      other path inputs and the version source resolve under it. "." (the
+      default) is the repository's one track, exactly as before tracks.
+    required: false
+    default: "."
 runs:
   using: composite
   steps:
     - name: changelog armed
       shell: bash
       env:
+        TRACK_PATH: ${{ inputs.path }}
         CHANGELOG: ${{ inputs.changelog }}
         VERSION_SOURCE: ${{ inputs.version-source }}
         FRAGMENTS_DIR: ${{ inputs.fragments-dir }}
