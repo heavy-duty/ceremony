@@ -62,6 +62,7 @@ scope:release-flow:
           - test/self-ref.test.sh
           - test/changelog-assemble.test.sh
           - test/tag-classify.test.sh
+          - test/track.test.sh
           # one test genuinely locates three subjects: the labels reusables,
           # release reusable and consumer-doc contract (#518 D3)
           - test/runner-input.test.sh
