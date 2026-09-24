@@ -12,6 +12,59 @@ Entries arrive as fragments — one `changelog.d/<issue>.md` per PR, never
 an edit to this file — and the release PR assembles them into the next
 section here (`bin/changelog-assemble`, #112).
 
+## 0.7.9 — 2026-09-24
+
+### Added
+
+- Release tracks: `release.yml` takes `path` and `tag-prefix`, so one repository can release several apps on their own version lines, each with its own `VERSION`, `CHANGELOG.md`, tags and re-arm. The defaults change nothing (#618).
+- The version guards take a `path` input, and the artifact hook gets `RELEASE_TAG` and `RELEASE_TRACK_PATH`, so each release track is checked and packaged on its own files (#618).
+- Mechanise the `0.6.0` upgrade crossing through the existing doctrine mirror sync while leaving the optional refs guard for consumers to adopt. (#605).
+- `ceremony-upgrade` performs the `0.7.8` guarded-scaffold crossing and says
+  that its final mirror re-sync writes the pull request template block (#602).
+- `bin/ceremony-upgrade` performs `0.5.0` instead of refusing it. The tag asks
+  a forward-moving tree for nothing, so the run is the ref bump and the mirror
+  re-sync, and the plan says which section of `docs/CONSUMERS.md` says why
+  (#600).
+- Two mechanised tags now, so a consumer at `0.3.0` reaches `0.5.0` in two
+  runs — one rung each, `0.4.1` then `0.5.0`, never both in one (#600).
+- `bin/ceremony-upgrade` performs `0.4.1`'s two-caller split instead of
+  refusing it: it writes the sweep caller from `docs/CONSUMERS.md`'s own stub
+  at that tag, relocates the labels caller's cron unchanged, and grants
+  `actions: write` (#597).
+- An applied step stops at the first crossed tag, reporting the pin it left
+  behind and what remains; a shape it cannot anchor refuses, tree untouched,
+  and every other migration tag refuses exactly as before (#597).
+
+### Changed
+
+- The issue contract separates a spec whose own question is open from one
+  scoped around a question live elsewhere: the second is mintable, every
+  mandating clause carries the scope in its own text, and a mint never
+  asserts what the prose it commissions cannot reach (#615).
+- Builders and reviewers now compare a `Closes #N` head's closing-issue graph against what the PR body declares, re-reading it after the last body edit, and sweep every copy of a quoted sentence that enrols an issue (#613).
+- `ceremony-upgrade` now crosses `0.7.0` for you instead of refusing. The tag asks a forward-moving tree for nothing — the release workflow's inputs are unchanged in name and requiredness across it — so the crossing is the refs and the mirror re-sync (#610).
+- Five of the eight migration rows are now mechanised. A consumer pinned `0.3.0` climbs to `0.7.8` one rung per run with no hand-only wall left on that path (#610).
+
+### Fixed
+
+- `refs-not-closing` shows the `Refs` occurrence that produced the
+  intersection rather than a correct `Closes` line, and picks the remedy
+  per number: a quoted-only one is sent to de-parse the archived record's
+  tokens and to leave its own closing sentence alone (#606).
+- The `actions:` grant refusal names line endings when a CRLF caller is the
+  only difference, instead of printing the same word on both sides of a
+  sentence saying they differ (#600).
+- The sweep caller's `with:` is written at the published stub's own indent
+  rather than a hard-coded four spaces, and a stub the step cannot read that
+  from fails loudly (#600).
+- Name the commit message as a second closing carrier in `BUILDER.md` and
+  `REVIEWER.md`, scope the closing-issue graph's authority to the PR body,
+  and send a reviewer at a `Refs` head to the PR's commit list (#591).
+- Make crossed-migration refusals name the first wall, explain the hand ref
+  move, and emit only a proven shorter step or an explicit no-step result (#588).
+- State the release PR's fragment exception where every builder reads it,
+  including both closed guard paths and the ordinary-PR alternative (#583).
+
 ## 0.7.8 — 2026-08-31
 
 ### Added
