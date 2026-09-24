@@ -60,7 +60,7 @@ printf 'AGENTS.md\nRULES.md\n' >"$SRC/docs/VENDORED.txt"
 printf '# router v1\n' >"$SRC/AGENTS.md"
 printf '# rules v1\n' >"$SRC/RULES.md"
 
-LADDER_TAGS="0.7.8 0.7.7 0.7.6 0.7.5 0.7.4 0.7.3 0.7.2 0.7.1 0.7.0 0.6.3 0.6.2 0.6.1 0.6.0 0.5.0 0.4.1 0.4.0 0.3.0 0.2.0 0.1.0"
+LADDER_TAGS="0.7.9 0.7.8 0.7.7 0.7.6 0.7.5 0.7.4 0.7.3 0.7.2 0.7.1 0.7.0 0.6.3 0.6.2 0.6.1 0.6.0 0.5.0 0.4.1 0.4.0 0.3.0 0.2.0 0.1.0"
 {
   printf '# Changelog\n\n## Unreleased\n\n- nothing yet\n\n'
   for t in $LADDER_TAGS; do
@@ -1065,6 +1065,35 @@ check "the crossing leaves the workflow set unchanged" 0 "same-workflow-set" \
   workflow_set_diff
 check "the crossing changes no workflow byte but the pin" 0 \
   "identical-but-for-the-pin" workflow_body_diff
+
+# --- the 0.7.9 step: release tracks ask the tree for nothing ----------------
+#
+# 0.7.0's class exactly: the tag adds optional workflow_call and guard inputs
+# whose defaults are the repository's one track, so the plan writes no byte
+# and the crossing changes nothing but the refs and the mirror.
+consumer tracks 0.7.8
+check "0.7.9 is announced as an applied step" 0 \
+  "0.7.9 is an APPLIED STEP, so this run performs 0.7.8 -> 0.7.9 and stops there" \
+  in_consumer tracks --check --source "$SRC" 0.7.9
+check "the 0.7.9 plan says the crossing asks this tree for no edit" 0 \
+  "no edit to this tree: 0.7.9 asks it for nothing" \
+  in_consumer tracks --check --source "$SRC" 0.7.9
+check "the 0.7.9 plan names the guide section" 0 \
+  'docs/CONSUMERS.md § "Release tracks: several version lines in one repository"' \
+  in_consumer tracks --check --source "$SRC" 0.7.9
+check_absent "the 0.7.9 plan is not a fault" 0 "FAULT" \
+  in_consumer tracks --check --source "$SRC" 0.7.9
+check_absent "the 0.7.9 plan is not hand-only" 0 "THE CROSSING IS HAND-ONLY" \
+  in_consumer tracks --check --source "$SRC" 0.7.9
+unchanged "the 0.7.9 check writes nothing" "$TMP/tracks" \
+  in_consumer tracks --check --source "$SRC" 0.7.9
+TRACKS_RUN="$TMP/tracks-run"
+capture_run "$TRACKS_RUN" in_consumer tracks --fix --source "$SRC" 0.7.9
+check "the 0.7.9 crossing completes" 0 \
+  "0.7.8 -> 0.7.9 done, including the applied step for 0.7.9" \
+  replay_run "$TRACKS_RUN"
+check "the 0.7.9 crossing advances every ref" 0 "$PIN_COUNT 0.7.9" \
+  refs tracks
 
 SRC_SCAF="$TMP/src-scaffold"
 cp -pPR "$SRC" "$SRC_SCAF"

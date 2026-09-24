@@ -155,6 +155,7 @@ MIGRATIONS=(
   "0.6.0|Doctrine mirror|RELEASES.md joins the vendored set and .ceremony/ is short a file until the mirror is re-synced; refs-not-closing becomes available; and the manifest at a tag is guaranteed the complete set only from here.|step_0_6_0_doctrine_and_refs"
   "0.7.0|The artifact hook|Native release-candidate cuts and deterministic rc re-arming arrive; earlier pins do not carry the rc release path.|step_0_7_0_rc_release_path"
   "0.7.8|The guarded scaffold — ceremony owns a block, you own the rest|.github/pull_request_template.md gains a ceremony-owned block, read from the pin's docs/SCAFFOLDED.txt, and docs-sync --check goes RED until it is there. Run docs-sync --fix from the repo root and commit that file alongside .ceremony/ in the SAME PR that moves the ref — split them and the default branch is red in between. Where the template already exists, --fix appends the block and leaves your own content alone.|step_0_7_8_guarded_scaffold"
+  "0.7.9|Release tracks: several version lines in one repository|release.yml gains two optional inputs, path and tag-prefix, and the four version guards gain an optional path. Their defaults are the repository's one track, so a caller valid below this tag is valid at it unchanged; a repository that releases several apps adds one caller per track by hand, as the guide describes.|step_0_7_9_release_tracks"
 )
 
 die() {
@@ -1666,6 +1667,24 @@ step_0_7_8_guarded_scaffold() {
     "    edit .github/pull_request_template.md — add or refresh the guarded-scaffold block."
     "    The mirror re-sync at the end of this run writes it through docs-sync --fix;"
     "    $GUIDE_NAME § \"The guarded scaffold — ceremony owns a block, you own the rest\" describes the ownership boundary."
+  )
+}
+
+# --- 0.7.9: release tracks, a crossing that asks the tree for nothing -------
+#
+# 0.7.0's class exactly. The tag adds optional inputs only — path and
+# tag-prefix on release.yml, path on the four version guards — and each
+# defaults to the repository's one track, so a caller valid below the tag is
+# valid at it unchanged and this step writes no byte. A consumer that wants a
+# second track adds a caller by hand; that is a new use of the tag, not a
+# migration across it.
+step_0_7_9_release_tracks() {
+  step_plan+=(
+    "    no edit to this tree: $first_crossed asks it for nothing. Release tracks"
+    "    arrive as optional workflow_call inputs whose defaults are this tree's"
+    "    one track, so a caller valid below this tag is valid at it unchanged."
+    "    $GUIDE_NAME § \"Release tracks: several version lines in one repository\""
+    "    describes adding a second track. So this run is the refs and the mirror."
   )
 }
 

@@ -706,6 +706,9 @@ app's own `VERSION` (or `package.json`), `CHANGELOG.md`, `changelog.d/` and
   and holds only letters, digits, `.`, `_`, `/` or `-`. The default, empty,
   keeps bare `X.Y.Z` tags.
 
+Release tracks are available at `0.7.9` and later. Both inputs default to the
+repository's one track, so a caller that names neither is unchanged.
+
 Every tag push reaches every track's tag door, so each track declares the
 others' tags through `non-release-namespace`:
 
