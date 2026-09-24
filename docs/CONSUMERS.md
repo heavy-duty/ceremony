@@ -691,6 +691,48 @@ every tag follows the pre-existing release-or-loud-failure behavior unchanged.
 Everything else a repo might vary is a change to the ceremony itself, made in
 this repo, once.
 
+#### Release tracks: several version lines in one repository
+
+A repository that ships two apps on their own versions calls the workflow
+once per app, each call a **release track**: a directory holding the
+app's own `VERSION` (or `package.json`), `CHANGELOG.md`, `changelog.d/` and
+`drills/`, released under its own tag prefix. Two inputs name it:
+
+- `path` — the track's directory, relative to the repository root. The
+  version source, the changelog and the re-arm all resolve under it. The
+  default `.` is the repository's one track, exactly as before.
+- `tag-prefix` — prepended literally to the version for the track's tags and
+  release names: `admin-` releases `admin-2.1.0`. It starts with a letter
+  and holds only letters, digits, `.`, `_`, `/` or `-`. The default, empty,
+  keeps bare `X.Y.Z` tags.
+
+Every tag push reaches every track's tag door, so each track declares the
+others' tags through `non-release-namespace`:
+
+```yaml
+jobs:
+  release-site:   # the default track: bare tags at the root
+    uses: heavy-duty/ceremony/.github/workflows/release.yml@<pinned-tag>
+    with:
+      version-source: file
+      non-release-namespace: admin-*
+  release-admin:
+    uses: heavy-duty/ceremony/.github/workflows/release.yml@<pinned-tag>
+    with:
+      version-source: file
+      path: apps/admin
+      tag-prefix: admin-
+      non-release-namespace: "[0-9]*"
+```
+
+The version guards take the same `path` input, one step per track:
+`changelog-armed`, `changelog-assembled`, `changelog-monotonic` and
+`drill-recorded` read that track's files and nothing else. A ceremony PR
+stamps one track's `VERSION` and `CHANGELOG.md`; the other track's merge door
+sees an ordinary merge on the same push. The assembler is run by hand with
+the track's paths: `bin/changelog-assemble 2.1.0 <date> --changelog
+apps/admin/CHANGELOG.md --dir apps/admin/changelog.d`.
+
 Keep the merge door on `push` to `main` — never `pull_request`: a
 `pull_request` run from a public fork gets a read-only `GITHUB_TOKEN` that
 `permissions:` cannot raise (box#97), and every ceremony PR in this org is
@@ -705,6 +747,11 @@ tag door instead (the known first-release edge, cast#111).
 If the repository contains `.github/actions/release-artifact/action.yml`,
 both doors invoke it — after the tag exists, before `gh release create` —
 with the release `version` as input and `RELEASE_ASSETS_DIR` exported.
+`RELEASE_TAG` (the tag being published — the version itself on the default
+track, `admin-2.1.0` on a prefixed one) and `RELEASE_TRACK_PATH` (the
+track's directory, `.` by default) are exported too, so one hook can serve
+several release tracks. `version` stays the bare version, so a single-track
+hook needs no change.
 Contract for hook authors:
 
 - Drop finished files into `$RELEASE_ASSETS_DIR`; every file there is
