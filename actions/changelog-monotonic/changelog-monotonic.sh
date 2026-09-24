@@ -64,6 +64,14 @@ changelog="${2:-${CHANGELOG:-CHANGELOG.md}}"
 # refuses to take it at all.
 strict="${CHANGELOG_MONOTONIC_STRICT:-0}"
 
+# A release track (#618): the changelog resolves under the track's
+# directory, root-relative — the default track "." changes nothing.
+here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/track.sh
+. "$here/../../lib/track.sh"
+track="$(track_path_normalize "${TRACK_PATH:-.}")" || exit 1
+changelog="$(track_file "$track" "$changelog")"
+
 skip() {
   if [ "$strict" = "1" ]; then
     echo "changelog-monotonic: $* — and CHANGELOG_MONOTONIC_STRICT=1, so this is a FAILURE, not a skip." >&2

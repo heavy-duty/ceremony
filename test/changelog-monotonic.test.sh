@@ -271,4 +271,28 @@ env_tree() {
 }
 check "env vars drive the script the way action.yml does" 0 "still present" env_tree
 
+# --- release tracks (#618): the track's changelog is the one compared --------
+
+repo track-mono <<'EOF'
+# Changelog
+
+## 1.6.0 — 2026-09-24
+
+- The site's entry.
+EOF
+mkdir -p "$TMP/track-mono/apps/admin"
+base_changelog >"$TMP/track-mono/apps/admin/CHANGELOG.md"
+git -C "$TMP/track-mono" add -A
+git -C "$TMP/track-mono" commit -qm "admin track"
+git -C "$TMP/track-mono" branch -f base
+grep -v '^## 0.7.0' "$TMP/track-mono/apps/admin/CHANGELOG.md" >"$TMP/track-mono/apps/admin/CHANGELOG.new"
+mv "$TMP/track-mono/apps/admin/CHANGELOG.new" "$TMP/track-mono/apps/admin/CHANGELOG.md"
+git -C "$TMP/track-mono" commit -qam "drop a shipped heading in the track"
+track_mono() { local track="$1"; shift; (cd "$TMP/track-mono" && TRACK_PATH="$track" bash "$SCRIPT" "$@"); }
+
+check "a shipped heading deleted from a track's changelog fails" 1 "0.7.0" \
+  track_mono apps/admin base
+check "the root's changelog is compared on its own and still passes" 0 "still present" \
+  track_mono . base
+
 summary

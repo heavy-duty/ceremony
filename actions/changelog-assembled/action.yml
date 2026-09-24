@@ -39,12 +39,20 @@ inputs:
       degrades sensibly.
     required: false
     default: "1"
+  path:
+    description: >-
+      The release track's directory, relative to the workspace (#618). The
+      other path inputs and the version source resolve under it. "." (the
+      default) is the repository's one track, exactly as before tracks.
+    required: false
+    default: "."
 runs:
   using: composite
   steps:
     - name: changelog assembled
       shell: bash
       env:
+        TRACK_PATH: ${{ inputs.path }}
         CHANGELOG_ASSEMBLED_BASE: ${{ inputs.base-ref }}
         CHANGELOG: ${{ inputs.changelog }}
         CHANGELOG_ASSEMBLED_DIR: ${{ inputs.fragments-dir }}

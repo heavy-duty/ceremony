@@ -356,4 +356,64 @@ env_tree() {
 }
 check "env vars drive the script the way action.yml does" 0 "byte-for-byte" env_tree
 
+# --- release tracks (#618): the guard replays the track's own fragments -----
+
+# seed_track <name> — seed_flat's tree at the root, plus an admin track at
+# apps/admin with its own armed changelog, fragments and -dev version.
+seed_track() {
+  local name="$1" dir="$TMP/$1"
+  seed_flat "$name"
+  mkdir -p "$dir/apps/admin/changelog.d"
+  printf 'Machine-assembled; see heavy-duty/ceremony#112.\n' >"$dir/apps/admin/changelog.d/README.md"
+  cat >"$dir/apps/admin/CHANGELOG.md" <<'EOF'
+# Changelog
+
+## 2.0.0 — 2026-09-01
+
+- The admin's shipped entry.
+EOF
+  printf '2.0.1-dev\n' >"$dir/apps/admin/VERSION"
+  printf -- '- The admin fixed a thing (#31).\n' >"$dir/apps/admin/changelog.d/31.md"
+  git -C "$dir" add -A
+  git -C "$dir" commit -qm "admin track"
+  git -C "$dir" branch -f base
+}
+
+# track_ceremony <name> <ver> <date> — the admin track's release edit, run from
+# the repository root with the track's paths, exactly as a consumer would.
+track_ceremony() {
+  local name="$1" ver="$2" stamp="$3"
+  (cd "$TMP/$name" && "$ASSEMBLE" "$ver" "$stamp" \
+    --changelog apps/admin/CHANGELOG.md --dir apps/admin/changelog.d >/dev/null 2>&1) || return 1
+  printf '%s\n' "$ver" >"$TMP/$name/apps/admin/VERSION"
+}
+track_run() { local name="$1" track="$2"; shift 2; (cd "$TMP/$name" && TRACK_PATH="$track" bash "$SCRIPT" "$@"); }
+
+seed_track track-faithful
+track_ceremony track-faithful 2.0.1 2026-09-24
+commit_head track-faithful
+check "a track's ceremony is byte-for-byte its own fragments' assembly" 0 \
+  "byte-for-byte" track_run track-faithful apps/admin base
+check "the report names the track's changelog" 0 "apps/admin/CHANGELOG.md" \
+  track_run track-faithful apps/admin base
+check "the default track beside it is a -dev tree, untouched" 0 "development tree" \
+  track_run track-faithful . base
+
+seed_track track-tampered
+track_ceremony track-tampered 2.0.1 2026-09-24
+sed -i 's/fixed a thing/fixed something else/' "$TMP/track-tampered/apps/admin/CHANGELOG.md"
+commit_head track-tampered
+check "a track section that is not its fragments' assembly fails" 1 \
+  "is NOT what the fragments it consumed assemble to" track_run track-tampered apps/admin base
+
+seed_track track-crossed
+# The root's fragments are consumed into the admin's changelog: the admin's
+# own fragment set at the merge base does not assemble to that section.
+(cd "$TMP/track-crossed" && "$ASSEMBLE" 2.0.1 2026-09-24 \
+  --changelog apps/admin/CHANGELOG.md --dir changelog.d >/dev/null 2>&1)
+printf '2.0.1\n' >"$TMP/track-crossed/apps/admin/VERSION"
+commit_head track-crossed
+check "another track's fragments stamped into this track's changelog fail" 1 "" \
+  track_run track-crossed apps/admin base
+
 summary

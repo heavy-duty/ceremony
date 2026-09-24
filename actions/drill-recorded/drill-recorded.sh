@@ -79,13 +79,19 @@ version_source="${2:-${VERSION_SOURCE:-file}}"
 here="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/version.sh
 . "$here/../../lib/version.sh"
+# shellcheck source=lib/track.sh
+. "$here/../../lib/track.sh"
+# A release track (#618): every file this guard reads resolves under the
+# track's directory, root-relative — the default track "." changes nothing.
+track="$(track_path_normalize "${TRACK_PATH:-.}")" || exit 1
+drills="$(track_file "$track" "$drills")"
 
 # A missing or empty version source is an ERROR, never a silent pass. A
 # guard that cannot read the version cannot know whether this tree is its
 # business, and "could not tell" must not resolve to "allowed". version_read
 # refuses loudly on its own; the wrapper line names the guard so a workflow
 # log shows which check refused.
-ver="$(version_read "$version_source")" || {
+ver="$(version_read "$version_source" "$track")" || {
   echo "drill-recorded: cannot read the version (version-source: $version_source)" >&2
   exit 1
 }
