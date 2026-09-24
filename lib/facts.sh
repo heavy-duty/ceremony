@@ -6,13 +6,15 @@
 # facts. It runs inside the consumer's checkout (the working directory),
 # talks to git and gh, and prints the facts in $GITHUB_OUTPUT form:
 #
-#   ver=…  base_ver=…  released=(yes|no|empty)  labeled=(yes|no|empty)
+#   ver=…  base_ver=…  released=(yes|no|empty)  labeled=(yes|no|empty)  tag=…
 #
 # stdout carries exclusively those lines — the release workflow appends the
 # whole stream to $GITHUB_OUTPUT — so every diagnostic goes to stderr.
 #
 # Env in:
 #   VERSION_SOURCE      file | package-json (the workflow's one input)
+#   TRACK_PATH          the release track's directory (#618); default "."
+#   TAG_PREFIX          the release track's tag prefix (#618); default ""
 #   MERGE_SHA           the pushed head (github.sha)
 #   EVENT_BEFORE        github.event.before — may be empty or all-zeros
 #   GITHUB_REPOSITORY   for the two API facts
@@ -26,20 +28,30 @@ set -euo pipefail
 
 # shellcheck source=lib/version.sh
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/version.sh"
+# shellcheck source=lib/track.sh
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/track.sh"
 
 : "${VERSION_SOURCE:?facts: VERSION_SOURCE is required}"
 : "${MERGE_SHA:?facts: MERGE_SHA is required}"
 
+track="$(track_path_normalize "${TRACK_PATH:-.}")"
+prefix="${TAG_PREFIX:-}"
+track_prefix_check "$prefix"
+
 case "$VERSION_SOURCE" in
-  file) src=VERSION ;;
-  package-json) src=package.json ;;
+  file) name=VERSION ;;
+  package-json) name=package.json ;;
   *)
     echo "facts: unknown VERSION_SOURCE '$VERSION_SOURCE' — expected file or package-json" >&2
     exit 1
     ;;
 esac
 
-ver="$(version_read "$VERSION_SOURCE")"
+# The version source, root-relative: `git show <rev>:<src>` below reads the
+# base tree by that path, so the track's directory is part of it.
+src="$(track_file "$track" "$name")"
+ver="$(version_read "$VERSION_SOURCE" "$track")"
+tag="$(track_tag "$prefix" "$ver")"
 
 # event.before is all-zeros on a branch-create push, and absent outside push
 # events; the pushed head's first parent is main the instant before, either
@@ -78,7 +90,7 @@ fi
 base_dir="$(mktemp -d)"
 trap 'rm -rf "$base_dir"' EXIT
 
-if [ -n "$base_sha" ] && git show "$base_sha:$src" >"$base_dir/$src" 2>/dev/null; then
+if [ -n "$base_sha" ] && git show "$base_sha:$src" >"$base_dir/$name" 2>/dev/null; then
   base_ver="$(version_read "$VERSION_SOURCE" "$base_dir")"
 else
   # No base tree (a root commit — the repository's first push, the 0.2.0
@@ -99,7 +111,7 @@ if ! version_is_dev "$ver"; then
     # verdict this feeds (row 4) is a refusal, and the ceremony path
     # re-checks existence in the nothing-exists assert before creating
     # anything.
-    if gh release view "$ver" -R "$GITHUB_REPOSITORY" --json name >/dev/null 2>&1; then
+    if gh release view "$tag" -R "$GITHUB_REPOSITORY" --json name >/dev/null 2>&1; then
       released=yes
     else
       released=no
@@ -120,8 +132,9 @@ if ! version_is_dev "$ver"; then
   fi
 fi
 
-echo "facts: ver='$ver' base_ver='$base_ver' released='$released' labeled='$labeled'" >&2
+echo "facts: ver='$ver' base_ver='$base_ver' released='$released' labeled='$labeled' tag='$tag'" >&2
 printf 'ver=%s\n' "$ver"
 printf 'base_ver=%s\n' "$base_ver"
 printf 'released=%s\n' "$released"
 printf 'labeled=%s\n' "$labeled"
+printf 'tag=%s\n' "$tag"

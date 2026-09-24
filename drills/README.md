@@ -258,6 +258,7 @@ drill owed, that verdict wins.
    lib/version.sh
    lib/decide.sh
    lib/facts.sh
+   lib/track.sh
    lib/changelog.sh
    ```
 

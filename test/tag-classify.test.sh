@@ -76,7 +76,33 @@ invalid_equal_version_preserves_release_path() {
   ) || return
 
   output="$(cat "$tree/output")"
-  [ "$output" = "ver=1.2.3-dev" ] && [ "$(non_release_gate_count)" = "4" ]
+  [ "$output" = "$(printf 'ver=1.2.3-dev\ntag=1.2.3-dev')" ] && [ "$(non_release_gate_count)" = "4" ]
+}
+
+# --- release tracks (#618): a literal tag prefix per track --------------------
+
+classify_track() { # $1 = tag, $2 = prefix, $3 = namespace
+  env TAG="$1" TAG_PREFIX="$2" NON_RELEASE_NAMESPACE="${3-}" bash "$CLASSIFY"
+}
+
+# track_assert <tree> <track> <prefix> <tag> — the real assertion body, run in
+# a constructed repository with the track's environment.
+track_assert() {
+  local body
+  body="$(assertion_body)"
+  (
+    cd "$1" || exit
+    env CEREMONY_DIR="$ROOT" VERSION_SOURCE=file TRACK_PATH="$2" TAG_PREFIX="$3" \
+      GITHUB_REF_NAME="$4" GITHUB_OUTPUT="$1/output" \
+      bash -c "$body"
+  )
+}
+
+track_assert_publishes() {
+  local tree="$TMP/two-tracks"
+  rm -f "$tree/output"
+  track_assert "$tree" apps/admin admin- admin-2.1.0 || return
+  [ "$(cat "$tree/output")" = "$(printf 'ver=2.1.0\ntag=admin-2.1.0')" ]
 }
 
 TMP="$(mktemp -d)"
@@ -109,6 +135,37 @@ check "the invalid-tag failure remains byte-identical" 0 "" \
   assertion_failure_is_exact
 check "an invalid-shaped tag equal to the tree version keeps the legacy release path" 0 "" \
   invalid_equal_version_preserves_release_path
+
+mkdir -p "$TMP/two-tracks/apps/admin"
+printf '1.6.0\n' >"$TMP/two-tracks/VERSION"
+printf '2.1.0\n' >"$TMP/two-tracks/apps/admin/VERSION"
+
+check "a prefixed version is the track's release" 0 "classification=release" \
+  classify_track admin-2.1.0 admin-
+check "a prefixed rc is the track's release" 0 "classification=release" \
+  classify_track admin-2.1.0-rc1 admin-
+check "the prefix is literal: a missing dash is not the track's tag" 0 \
+  "classification=invalid" classify_track admin2.1.0 admin-
+check "the prefix is literal: a 'v' after it is not a version" 0 \
+  "classification=invalid" classify_track admin-v2.1.0 admin-
+check "a bare version is not a prefixed track's release" 0 \
+  "classification=invalid" classify_track 2.1.0 admin-
+check "the other track's bare tags no-op when declared" 0 \
+  "classification=non-release" classify_track 1.6.0 admin- '[0-9]*'
+check "the default track no-ops on a declared prefixed track" 0 \
+  "classification=non-release" classify_track admin-2.1.0 "" 'admin-*'
+check "the prefix is not a glob: '*' is refused" 1 \
+  "must start with a letter" classify_track anything '*'
+check "a prefix starting with a digit is refused" 1 \
+  "must start with a letter" classify_track 1-2.1.0 1-
+check "the assertion reads the track's VERSION and outputs the prefixed tag" 0 "" \
+  track_assert_publishes
+check "a track tag naming the wrong version refuses, naming the expected tag" 1 \
+  "does not match the track's tag 'admin-2.1.0' (version '2.1.0' in 'apps/admin')" \
+  track_assert "$TMP/two-tracks" apps/admin admin- admin-2.0.9
+check "the default track still reads the root VERSION beside a track" 1 \
+  "does not match the tree's version '1.6.0'" \
+  track_assert "$TMP/two-tracks" . "" 2.1.0
 
 # The classifier runs before the version assertion; every release-side step
 # is then explicitly gated. This makes the no-op perform no version read,

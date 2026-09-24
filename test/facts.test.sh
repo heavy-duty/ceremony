@@ -38,6 +38,15 @@ case "${GH_STUB:-none}" in
     fi
     [ "${GH_STUB}" = released-yes ] && exit 0 || exit 1
     ;;
+  released-echo)
+    # A track's released fact (#618): name the release asked about.
+    if [ "$1" != release ]; then
+      echo "gh stub: expected a release call, got: gh $*" >&2
+      exit 97
+    fi
+    echo "gh stub asked: gh $*" >>"$GH_STUB_LOG"
+    exit 0
+    ;;
   *)
     echo "gh stub: gh must not be called in this state (gh $*)" >&2
     exit 97
@@ -207,5 +216,61 @@ nv_base="$(commit no-version README.md "a tree")"
 nv_head="$(commit no-version README.md "with no version at the head either")"
 check "no version at the head fails loudly" 1 "no such file" \
   facts_in no-version VERSION_SOURCE=file MERGE_SHA="$nv_head" EVENT_BEFORE="$nv_base"
+
+# --- release tracks (#618): the version source and the tag follow the track ---
+
+# commit_at <repo> <path> <content> — commit one file at a nested path.
+commit_at() {
+  mkdir -p "$(dirname "$TMP/$1/$2")"
+  printf '%s\n' "$3" >"$TMP/$1/$2"
+  git -C "$TMP/$1" add "$2"
+  git -C "$TMP/$1" commit -qm "set $2"
+  git -C "$TMP/$1" rev-parse HEAD
+}
+
+repo tracks
+commit_at tracks VERSION 1.6.0-dev >/dev/null
+tr_base="$(commit_at tracks apps/admin/VERSION 2.1.0-dev)"
+tr_head="$(commit_at tracks apps/admin/VERSION 2.1.0)"
+
+check "a track's ver is its own VERSION's" 0 "ver=2.1.0" \
+  facts_in tracks VERSION_SOURCE=file TRACK_PATH=apps/admin TAG_PREFIX=admin- \
+    MERGE_SHA="$tr_head" EVENT_BEFORE="$tr_base" GH_STUB=labeled-yes
+check "a track's base_ver is read from the base tree at the track's path" 0 "base_ver=2.1.0-dev" \
+  facts_in tracks VERSION_SOURCE=file TRACK_PATH=./apps/admin/ TAG_PREFIX=admin- \
+    MERGE_SHA="$tr_head" EVENT_BEFORE="$tr_base" GH_STUB=labeled-yes
+check "a track's tag carries its prefix" 0 "tag=admin-2.1.0" \
+  facts_in tracks VERSION_SOURCE=file TRACK_PATH=apps/admin TAG_PREFIX=admin- \
+    MERGE_SHA="$tr_head" EVENT_BEFORE="$tr_base" GH_STUB=labeled-yes
+check "the default track beside it sees its own -dev and consults no API" 0 "ver=1.6.0-dev" \
+  facts_in tracks VERSION_SOURCE=file MERGE_SHA="$tr_head" EVENT_BEFORE="$tr_base"
+check "the default track's tag is the bare version" 0 "tag=1.6.0-dev" \
+  facts_in tracks VERSION_SOURCE=file MERGE_SHA="$tr_head" EVENT_BEFORE="$tr_base"
+
+tr_win="$(commit_at tracks apps/admin/notes.txt "post-release window work")"
+released_asked() {
+  : >"$TMP/gh-asked"
+  facts_in tracks VERSION_SOURCE=file TRACK_PATH=apps/admin TAG_PREFIX=admin- \
+    MERGE_SHA="$tr_win" EVENT_BEFORE="$tr_head" GH_STUB=released-echo GH_STUB_LOG="$TMP/gh-asked" >/dev/null 2>&1
+  cat "$TMP/gh-asked"
+}
+check "released is asked about the track's prefixed release" 0 "gh stub asked: gh release view admin-2.1.0" \
+  released_asked
+check "a track path outside the repository refuses" 1 "is absolute" \
+  facts_in tracks VERSION_SOURCE=file TRACK_PATH=/etc TAG_PREFIX=admin- \
+    MERGE_SHA="$tr_head" EVENT_BEFORE="$tr_base"
+check "a glob prefix refuses" 1 "must start with a letter" \
+  facts_in tracks VERSION_SOURCE=file TRACK_PATH=apps/admin 'TAG_PREFIX=*' \
+    MERGE_SHA="$tr_head" EVENT_BEFORE="$tr_base"
+
+repo tracks-pkg
+commit_at tracks-pkg apps/cli/package.json '{"name":"cli","version":"0.3.0-dev"}' >/dev/null
+pkg_head="$(commit_at tracks-pkg apps/cli/package.json '{"name":"cli","version":"0.3.0"}')"
+check "a package-json track reads the track's package.json" 0 "ver=0.3.0" \
+  facts_in tracks-pkg VERSION_SOURCE=package-json TRACK_PATH=apps/cli TAG_PREFIX=cli- \
+    MERGE_SHA="$pkg_head" EVENT_BEFORE= GH_STUB=labeled-yes
+check "a package-json track's base comes from the track's package.json" 0 "base_ver=0.3.0-dev" \
+  facts_in tracks-pkg VERSION_SOURCE=package-json TRACK_PATH=apps/cli TAG_PREFIX=cli- \
+    MERGE_SHA="$pkg_head" EVENT_BEFORE= GH_STUB=labeled-yes
 
 summary
