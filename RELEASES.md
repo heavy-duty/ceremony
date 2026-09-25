@@ -237,9 +237,10 @@ work stays in the primary window. (#248)
 One repository may ship more than one app, each on its own version line: a
 **release track** is a directory holding the app's own version source,
 `CHANGELOG.md`, `changelog.d/` and `drills/`, released under its own tag
-prefix (#618). The repository declares its tracks by calling the release
-workflow once per track, with `path` and `tag-prefix`
-([docs/CONSUMERS.md](docs/CONSUMERS.md)). A repository with one app has one
+prefix (#618). The repository declares its tracks in one caller of the
+release workflow, a matrix leg per track with `path` and `tag-prefix`
+([docs/CONSUMERS.md](docs/CONSUMERS.md)), because the pin is one `uses:` line
+and the legs run one at a time (#623). A repository with one app has one
 track, the default one, and nothing here changes it.
 
 Each track runs its own ladder, its own release-candidate windows and its own
