@@ -156,7 +156,7 @@ on:
           several apps from one repository, call this workflow from ONE
           caller job with a matrix leg per track, max-parallel: 1 and
           fail-fast: false (#623): docs-sync reads the pin from a single
-          uses: line, and serial legs never race their re-arm pushes to main.
+          uses line, and serial legs never race their re-arm pushes to main.
         type: string
         required: false
         default: "."
