@@ -12,6 +12,12 @@ Entries arrive as fragments — one `changelog.d/<issue>.md` per PR, never
 an edit to this file — and the release PR assembles them into the next
 section here (`bin/changelog-assemble`, #112).
 
+## 0.7.10 — 2026-09-25
+
+### Fixed
+
+- Several release tracks are now documented as one caller job with a matrix leg per track (`max-parallel: 1`, `fail-fast: false`), not one job per track: `docs-sync` needs a single pin line, and serial legs never race their re-arm pushes to `main` (#623).
+
 ## 0.7.9 — 2026-09-24
 
 ### Added
