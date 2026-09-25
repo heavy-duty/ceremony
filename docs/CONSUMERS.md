@@ -693,8 +693,8 @@ this repo, once.
 
 #### Release tracks: several version lines in one repository
 
-A repository that ships two apps on their own versions calls the workflow
-once per app, each call a **release track**: a directory holding the
+A repository that ships two apps on their own versions releases each app as
+a **release track**: a directory holding the
 app's own `VERSION` (or `package.json`), `CHANGELOG.md`, `changelog.d/` and
 `drills/`, released under its own tag prefix. Two inputs name it:
 
@@ -710,22 +710,37 @@ Release tracks are available at `0.7.9` and later. Both inputs default to the
 repository's one track, so a caller that names neither is unchanged.
 
 Every tag push reaches every track's tag door, so each track declares the
-others' tags through `non-release-namespace`:
+others' tags through `non-release-namespace`.
+
+Call the workflow from **one** caller job, with one matrix leg per track.
+Never write a second job with its own `uses:` line: `docs-sync` reads the pin
+from the single `uses: heavy-duty/ceremony/.github/workflows/release.yml@<ref>`
+line, and refuses two as an ambiguous pin. The legs run one at a time
+(`max-parallel: 1`), because each leg's merge door pushes its re-arm to
+`main`, and two legs racing that push would leave one of them opening a bump
+PR instead. `fail-fast: false` keeps one track's failure from cancelling the
+other's release:
 
 ```yaml
 jobs:
-  release-site:   # the default track: bare tags at the root
+  release:
+    strategy:
+      max-parallel: 1   # one leg at a time: the re-arm pushes never race
+      fail-fast: false  # one track failing never cancels the other
+      matrix:
+        include:
+          - path: .     # the default track: bare tags at the root
+            tag-prefix: ""
+            non-release-namespace: admin-*
+          - path: apps/admin
+            tag-prefix: admin-
+            non-release-namespace: "[0-9]*"
     uses: heavy-duty/ceremony/.github/workflows/release.yml@<pinned-tag>
     with:
       version-source: file
-      non-release-namespace: admin-*
-  release-admin:
-    uses: heavy-duty/ceremony/.github/workflows/release.yml@<pinned-tag>
-    with:
-      version-source: file
-      path: apps/admin
-      tag-prefix: admin-
-      non-release-namespace: "[0-9]*"
+      path: ${{ matrix.path }}
+      tag-prefix: ${{ matrix.tag-prefix }}
+      non-release-namespace: ${{ matrix.non-release-namespace }}
 ```
 
 The version guards take the same `path` input, one step per track:

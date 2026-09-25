@@ -152,9 +152,11 @@ on:
           The release track's directory, relative to the repository root
           (#618): its VERSION or package.json, CHANGELOG.md and changelog.d/
           live there, and the re-arm writes there. "." (the default) is the
-          repository's one track, exactly as before tracks. Call this
-          workflow once per track to release several apps from one
-          repository.
+          repository's one track, exactly as before tracks. To release
+          several apps from one repository, call this workflow from ONE
+          caller job with a matrix leg per track, max-parallel: 1 and
+          fail-fast: false (#623): docs-sync reads the pin from a single
+          uses line, and serial legs never race their re-arm pushes to main.
         type: string
         required: false
         default: "."
