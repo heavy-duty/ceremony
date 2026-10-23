@@ -12,6 +12,13 @@ Entries arrive as fragments — one `changelog.d/<issue>.md` per PR, never
 an edit to this file — and the release PR assembles them into the next
 section here (`bin/changelog-assemble`, #112).
 
+## 0.7.11 — 2026-10-22
+
+### Fixed
+
+- The merge door's release-label read no longer takes an empty API answer for a missing label: `lib/labeled.sh` retries the commit's pull requests three times, then searches merged pull requests by the merge SHA, before reading `no` (heavy-duty/la-familia-site#907, #628).
+- Every read of the release label logs its attempt, gh's exit code, the answer's size and its verdict, so a refused release says why in the job log (#628).
+
 ## 0.7.10 — 2026-09-25
 
 ### Fixed
