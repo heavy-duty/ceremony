@@ -12,6 +12,12 @@ Entries arrive as fragments — one `changelog.d/<issue>.md` per PR, never
 an edit to this file — and the release PR assembles them into the next
 section here (`bin/changelog-assemble`, #112).
 
+## 0.7.13 — 2026-11-24
+
+### Added
+
+- `runner-lanes` guard: untrusted-lane jobs hold read-only permissions, no secrets but `GITHUB_TOKEN` and no environment; deploy-lane jobs have no `uses:`, container, services, container tools or code fetches. Lanes come from labels or `vars.LANE_*`, reusable callers by their runner input (#640).
+
 ## 0.7.12 — 2026-11-20
 
 ### Fixed
